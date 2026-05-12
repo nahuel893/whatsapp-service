@@ -1,0 +1,20 @@
+{
+  "name": "whatsapp-service",
+  "version": "2.0.0",
+  "description": "Abstracción genérica de Baileys — API HTTP para enviar mensajes WhatsApp",
+  "main": "index.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.16",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "pino": "^9.4.0",
+    "qrcode-terminal": "^0.12.0"
+  }
+}

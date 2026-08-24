@@ -1,5 +1,10 @@
 # ── Auth — NEVER commit session data ──────────────────────────────────────
-session/
+# Covers session/, session.bak-*/, session.dead-*/ and any future variant.
+session*/
+
+# ── Runtime state — queue database and file spool ─────────────────────────
+data/
+spool/
 
 # ── Dependencies ──────────────────────────────────────────────────────────
 node_modules/
@@ -10,4 +15,3 @@ node_modules/
 # ── OS ────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-session.bak-*/

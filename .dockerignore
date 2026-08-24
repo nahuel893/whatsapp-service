@@ -1,0 +1,15 @@
+# Never copy WhatsApp auth keys or queue state into an image.
+session*/
+data/
+spool/
+.env
+
+node_modules/
+.git/
+.gitignore
+.atl/
+docs/
+test/
+*.md
+Dockerfile
+.dockerignore

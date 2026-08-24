@@ -4,11 +4,12 @@
   "description": "Abstracción genérica de Baileys — API HTTP para enviar mensajes WhatsApp",
   "main": "index.js",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.0.0"
   },
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "test": "node --test 'test/*.test.js'"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "^7.0.0-rc13",

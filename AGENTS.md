@@ -25,7 +25,8 @@ Abstracción genérica de Baileys (WhatsApp Web) como API HTTP standalone. Cualq
 - **Repo**: `~/projects/whatsapp-service/`
 - **Systemd**: `whatsapp-service.service` (user unit)
 - **Número conectado**: `5490000000000` (the operator)
-- **Branch actual**: `feat/baileys-v7-lid` (commits sin pushear todavía)
+- **Branch actual**: `main` — `feat/baileys-v7-lid` ya se mergeó (fast-forward,
+  2026-08-27). El repo todavía no tiene remote, así que nada está pusheado
 - **Tag de rollback pre-v7**: `pre-baileys-v7-20260605-174520`
 - **Backup de sesión pre-v7**: `session.bak-20260605-174520/`
 
@@ -476,7 +477,9 @@ Con esto volvés al estado pre-upgrade en ~1 minuto. El problema "Esperando este
 
 2. **`addressingMode` per-message no especificado** — v7 expone `WAMessageAddressingMode = { PN, LID }` pero la implementación actual no lo setea en `sendMessage`. Baileys auto-resuelve via signal repository, OK para 99% de casos. Si aparecen problemas con contactos nuevos: investigar pasar `{addressingMode: WAMessageAddressingMode.LID}` en `sendMessage`.
 
-3. **Branch `feat/baileys-v7-lid` sin PR** — falta abrir el PR para review y merge a `main`. Tag de rollback creado.
+3. ~~**Branch `feat/baileys-v7-lid` sin PR**~~ **Mergeado a `main`** el 2026-08-27,
+   fast-forward. No hubo PR porque el repo no tiene remote. La branch quedó
+   apuntando al mismo commit que `main`; se puede borrar.
 
 3b. ~~**Credenciales de sesión en el historial de git.**~~ **Resuelto el
    2026-08-27** con `git filter-repo --path-glob 'session*' --invert-paths`.

@@ -478,11 +478,12 @@ Con esto volvés al estado pre-upgrade en ~1 minuto. El problema "Esperando este
 
 3. **Branch `feat/baileys-v7-lid` sin PR** — falta abrir el PR para review y merge a `main`. Tag de rollback creado.
 
-3b. **🔴 Credenciales de sesión en el historial de git.** El commit `a3f3bc4`
-   agregó `session.bak-20260605-174520/creds.json` y ~8380 archivos de sesión;
-   `19d34e3` los borró, pero **los blobs siguen en el historial**. El repo no
-   tiene remote todavía, así que el daño está contenido — pero **no se puede
-   pushear a ningún lado hasta limpiar el historial**. Ver § Antes de crear el
+3b. ~~**Credenciales de sesión en el historial de git.**~~ **Resuelto el
+   2026-08-27** con `git filter-repo --path-glob 'session*' --invert-paths`.
+   El historial ya no contiene ningún archivo de sesión; los 9 commits, la
+   branch `main` y el tag de rollback sobrevivieron. Todos los hashes
+   cambiaron. Backup del `.git` previo en
+   `../whatsapp-service.gitbak-20260827-013101/`. Ver § Antes de crear el
    remote.
 
 4. **`PRINT_QR=true` drop-in activo** — remover después de validar 24h de operación estable.
@@ -501,21 +502,33 @@ Con esto volvés al estado pre-upgrade en ~1 minuto. El problema "Esperando este
 
 ## Antes de crear el remote
 
-El historial contiene las claves de la sesión de WhatsApp (ver Pendiente 3b).
-Pushear tal como está las publica. Dos salidas:
-
-| Opción | Qué hace | Costo |
-|---|---|---|
-| Reescribir el historial | `git filter-repo --path-glob 'session*' --invert-paths` sobre los 6 commits | Hay que instalar `git-filter-repo` (no está); cambia todos los hashes |
-| Historial nuevo | `rm -rf .git && git init && git add . && git commit` | Se pierden los 6 commits de historia; es el camino más corto y este repo nunca se compartió |
-
-Cualquiera de las dos, **después** verificar:
+✅ **El historial ya está limpio.** El 2026-08-27 se corrió:
 
 ```bash
-git log --all --name-only --pretty=format: | grep -c '^session' # tiene que dar 0
+git filter-repo --path-glob 'session*' --invert-paths --force
 ```
 
-Y recién ahí crear el remote (privado) y pushear.
+Qué pasó: los ~8380 archivos de sesión que `a3f3bc4` había commiteado
+desaparecieron del historial. `.git` bajó de 2.8 MB a 276 KB. Se conservaron los
+9 commits, la branch `main` y el tag `pre-baileys-v7-20260605-174520`, así que el
+rollback a v6.7.16 sigue funcionando. **Todos los hashes cambiaron** — los que
+aparezcan en documentos viejos ya no existen.
+
+Se eligió reescribir en vez de `rm -rf .git && git init` justamente por el tag:
+es el camino de rollback documentado en § Rollback completo a v6.7.16, y un
+historial nuevo lo habría borrado.
+
+Backup del `.git` anterior en `../whatsapp-service.gitbak-20260827-013101/`
+(todavía **contiene las credenciales** — borralo cuando estés tranquilo, y no lo
+copies a ningún lado).
+
+Verificación, para repetir después de cualquier cambio de historial:
+
+```bash
+git log --all --name-only --pretty=format: | grep -c '^session'   # tiene que dar 0
+```
+
+Con eso ya se puede crear el remote (**privado**) y pushear.
 
 ---
 

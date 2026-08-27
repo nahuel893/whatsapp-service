@@ -120,11 +120,12 @@ Si eso se pushea, se regala la sesion de WhatsApp.
 
 ## Plan, en orden
 
-1. **Higiene del repo** — parcial
+1. **Higiene del repo** — casi
    - [x] `.gitignore` ahora usa `session*/`, que cubre las cuatro carpetas
    - [x] symlink `CLAUDE.md -> AGENTS.md`
-   - [ ] mergear `feat/baileys-v7-lid` — bloqueado, ver abajo
-   - [ ] crear el remote y pushear — **bloqueado**, ver abajo
+   - [x] historial limpiado con `git filter-repo` (2026-08-27)
+   - [x] mergear `feat/baileys-v7-lid`
+   - [ ] crear el remote y pushear — ya desbloqueado, falta decidir donde
 2. **Auth** — hecho. `lib/auth.js`, API key por `x-api-key` o
    `Authorization: Bearer`, comparacion en tiempo constante. Toda la config pasa
    por env (`process.loadEnvFile()` built-in), asi el mismo codigo corre bajo
@@ -139,18 +140,28 @@ Si eso se pushea, se regala la sesion de WhatsApp.
 
 49 tests con `node:test` (built-in, sin framework instalado): `npm test`.
 
-### Bloqueante nuevo, encontrado al hacer el paso 1
+### Bloqueante encontrado al hacer el paso 1 — resuelto
 
-**Las credenciales de la sesion ya estan en el historial de git.** El commit
+**Las credenciales de la sesion estaban en el historial de git.** El commit
 `a3f3bc4` agrego `session.bak-20260605-174520/creds.json` y ~8380 archivos de
-sesion; `19d34e3` los borro, pero los blobs siguen en el historial. El repo no
-tiene remote, asi que el dano esta contenido — pero pushear tal como esta
-publica la sesion de WhatsApp.
+sesion; `19d34e3` los borro del arbol, pero los blobs seguian alcanzables. El
+repo nunca tuvo remote, asi que el dano estuvo contenido.
 
-Por eso el merge y el remote quedan frenados: si la salida elegida es
-`rm -rf .git && git init`, mergear antes no sirve de nada.
+Limpiado el 2026-08-27:
 
-Ver § Antes de crear el remote en `AGENTS.md` para las dos opciones.
+```bash
+git filter-repo --path-glob 'session*' --invert-paths --force
+```
+
+`.git` bajo de 2.8 MB a 276 KB, cero archivos de sesion en el historial, y se
+conservaron los 9 commits, la branch `main` y el tag
+`pre-baileys-v7-20260605-174520`. Todos los hashes cambiaron.
+
+Se descarto `rm -rf .git && git init` por ese tag: es el camino de rollback a
+v6.7.16 que documenta `AGENTS.md`, y un historial nuevo lo habria borrado.
+
+Backup del `.git` viejo en `../whatsapp-service.gitbak-20260827-013101/`, que
+**todavia contiene las credenciales**. Borralo cuando no lo necesites.
 
 ### Lo que falta del paso 5
 

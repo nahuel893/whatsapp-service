@@ -24,7 +24,7 @@ Abstracción genérica de Baileys (WhatsApp Web) como API HTTP standalone. Cualq
 - **Puerto**: `localhost:3001` (HTTP, sin TLS — detrás de Tailscale)
 - **Repo**: `~/projects/whatsapp-service/`
 - **Systemd**: `whatsapp-service.service` (user unit)
-- **Número conectado**: `5490000000000` (the operator)
+- **Número conectado**: el que se pareó por QR. `GET /status` lo devuelve
 - **Branch actual**: `main` — `feat/baileys-v7-lid` ya se mergeó (fast-forward,
   2026-08-27). El repo todavía no tiene remote, así que nada está pusheado
 - **Tag de rollback pre-v7**: `pre-baileys-v7-20260605-174520`
@@ -173,7 +173,7 @@ echo "$KEY"   # guardalo: los consumidores lo necesitan
 ```
 
 ⚠️ Activarla **rompe a todo consumidor que no mande el header** — el reporter de
-`the report pipeline` incluido. Actualizá los consumidores en la misma pasada.
+el pipeline de reportes incluido. Actualizá los consumidores en la misma pasada.
 
 ### Config via systemd drop-ins
 
@@ -442,13 +442,18 @@ systemctl --user restart whatsapp-service.service
 
 ## Integración con el pipeline de reportes
 
-El sistema `report-pipeline` (Python) en `~/projects/the report pipeline/` usa este service via HTTP desde `src/delivery/steps/send_whatsapp.py`. URL configurada en `.env`:
+El consumidor principal es un pipeline de reportes en Python, que pega a este
+service por HTTP. La URL se configura del lado del consumidor:
 
 ```
 WHATSAPP_SERVICE_URL=http://localhost:3001
 ```
 
-El daily corre 07:00 Mon-Sat (timer `report-pipeline-daily.timer`). Cada reporte define sus recipients en su `configs/{servicio}.json` → el pipeline resuelve el contacto en `configs/contactos.json` → encola jobs via el service.
+Corre por timer de systemd. Cada reporte define sus destinatarios, el pipeline
+resuelve el contacto y encola un job por envío.
+
+⚠️ Ese pipeline **no manda la API key todavía**. Activar `API_KEY` acá sin
+actualizarlo en la misma pasada le rompe la entrega.
 
 ---
 

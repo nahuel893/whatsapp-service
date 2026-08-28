@@ -1,14 +1,14 @@
 # Plan: servicio desplegable con API y MCP
 
-> Redactado el 2026-08-24 desde el repo `the report pipeline`, para continuar en una
-> sesion abierta sobre este repo. Todo el "estado actual" de abajo fue
+> Redactado el 2026-08-24 desde el repo del pipeline consumidor, para continuar
+> en una sesion abierta sobre este repo. Todo el "estado actual" de abajo fue
 > verificado contra el codigo y contra el servicio corriendo, no asumido.
 
 ## Objetivo
 
 Convertir este repo en un **servicio desplegable** con API HTTP y servidor MCP,
-consumible por otras aplicaciones y por otros agentes — no solo por el reporter
-de Python de `the report pipeline`.
+consumible por otras aplicaciones y por otros agentes — no solo por el pipeline
+de reportes en Python que hoy lo usa.
 
 ## Estado actual (verificado 2026-08-24)
 
@@ -33,7 +33,7 @@ lib/session-store.js   25
 ```
 
 No hay `CLAUDE.md`. Claude Code lee `AGENTS.md` igual, pero conviene el symlink
-`CLAUDE.md -> AGENTS.md` (misma convencion que `the report pipeline`) para que ningun
+`CLAUDE.md -> AGENTS.md` (misma convencion que el repo consumidor) para que ningun
 agente lo pase por alto.
 
 ## Decision de arquitectura
@@ -70,7 +70,7 @@ whatsapp-service/                  <- un repo, un deploy
 
 5. **Respeta el principio que ya declara `AGENTS.md`**: *"NO incluye logica de
    agente, allowlist, dedup, ni forwarding — eso queda del lado del consumidor."*
-   El MCP **es** un consumidor, igual que el reporter de Python.
+   El MCP **es** un consumidor, igual que el pipeline de reportes en Python.
 
 El costo es un hop HTTP en localhost. Despreciable.
 
@@ -89,7 +89,7 @@ no devuelve nada fuera de comentarios sobre el auth state de Baileys.
 
 Hoy no importa porque escucha en localhost detras de Tailscale. Pero
 "desplegable y usable por otras apps" significa que **cualquiera que alcance el
-puerto manda mensajes de WhatsApp con el numero personal** (`5490000000000`).
+puerto manda mensajes de WhatsApp con el numero personal pareado.**
 Esto va primero, antes que el MCP.
 
 ### 2. La cola es 100% en memoria
@@ -180,7 +180,7 @@ plan: los pasos 2 a 4 se resolvieron enteros con built-ins de Node.
   session"*, el primer intento es `systemctl --user restart whatsapp-service`;
   si no alcanza, re-pair borrando `session/` y escaneando QR.
 - La copia del servicio que **corre** es esta, `~/projects/whatsapp-service/`.
-  La carpeta `whatsapp-service/` dentro de `the report pipeline` quedo sin
+  La carpeta `whatsapp-service/` dentro del repo consumidor quedo sin
   `package.json`: solo tiene `node_modules` y `session` residuales.
 
 ## Verificacion rapida

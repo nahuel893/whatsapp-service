@@ -13,6 +13,25 @@ Que un consumidor pueda **leer** los mensajes que llegan a una conversación y
 El consumidor principal serán agentes atendiendo clientes, pero nada del diseño
 asume que el consumidor sea un agente.
 
+## Qué necesita un agente del servicio
+
+El servicio no contiene lógica de agente, pero sí tiene que ofrecer lo que un
+agente no puede resolver solo. Esta lista sale de mirar un consumidor real, y
+cada punto está atado a una decisión de abajo.
+
+| Necesidad | Por qué el consumidor no puede resolverla solo | Dónde |
+|---|---|---|
+| Enterarse de un mensaje entrante | Sólo el servicio tiene la conexión al canal | D4 |
+| Ver únicamente lo permitido | No se puede desver lo que ya se recibió; filtrar del lado del cliente no es un permiso | D3 |
+| Saber qué contexto perdió | Sólo el servicio sabe qué purgó la retención | D5 |
+| Que un entrante no llegue dos veces | El proveedor reentrega. Un agente que procesa el duplicado **contesta dos veces**, y el cliente lo ve | `external_id` |
+| Responder rápido | El pacing anti-spam vive en el servicio, no en el consumidor | D6 |
+| Un id de conversación que sobreviva reinicios | El consumidor es efímero; el hilo no | D2 |
+
+Lo que el servicio **no** ofrece, y es del consumidor: resumir, decidir cuándo
+escalar a un humano, memoria de largo plazo, y a quién se le puede escribir
+(D7).
+
 ## Restricciones
 
 1. **El dominio no puede saber qué es WhatsApp.** Hoy dependemos de Baileys, que
@@ -67,17 +86,33 @@ política de negocio, del consumidor. Ésta es **qué puede leer una credencial*
 autorización. Un consumidor no puede filtrar lo que ya recibió: si el filtro
 vive del lado del cliente no es un permiso, es una sugerencia.
 
-### D4 — Lectura por cursor, no por webhook
+### D4 — El almacén es la fuente de verdad; la entrega es una estrategia encima
 
-El consumidor pregunta desde dónde quiere leer y el servicio le responde.
+Todo mensaje entrante se persiste **antes** de intentar entregarlo. Sobre ese
+almacén se ofrecen dos formas de leer, y un consumidor puede usar las dos:
 
-Un agente es efímero: se reinicia, se cae, se lo mata entre turnos. Con webhook,
-lo que llegó mientras estaba caído se pierde o hay que construir reintentos y
-una cola de entrega por consumidor. Con cursor, la recuperación es el caso
-normal y no necesita maquinaria extra.
+| Forma | Para quién | Latencia | Recuperación |
+|---|---|---|---|
+| Cursor (`?since=`) | consumidor efímero, que se reinicia entre turnos | la de su polling | es el caso normal |
+| Webhook | servicio de larga vida que quiere baja latencia | inmediata | cae de vuelta al cursor |
 
-Webhooks y SSE quedan fuera de alcance. Se pueden agregar después **encima** del
-cursor sin cambiar el modelo.
+El webhook **no reemplaza** al cursor: lo adelanta. Si el consumidor está caído,
+el servicio reintenta con backoff acotado y después deja de insistir — el
+mensaje sigue en el almacén, y el consumidor lo recupera por cursor con su
+último `seq` cuando vuelve. Así ningún mensaje se pierde por una caída del
+consumidor, sin construir una cola de entrega por suscriptor.
+
+Una entrega por webhook puede duplicarse (reintento sobre una entrega que sí
+había llegado). Cada mensaje lleva su `id` y su `seq`, que es lo que un
+consumidor necesita para deduplicar.
+
+**Corrección respecto de la primera versión de este documento**, que decía
+"cursor, no webhook" y justificaba que todo agente es efímero. Es falso: el
+primer consumidor real es un servicio de larga vida que ya expone un endpoint
+de inbound y hace su propia deduplicación. Un servicio que sólo ofreciera
+polling lo obligaría a degradarse.
+
+SSE queda fuera de alcance.
 
 ### D5 — La pérdida de contexto se reporta, no se oculta
 
@@ -185,7 +220,8 @@ Cada fase es entregable y verificable por separado.
 | F1 | Puerto de transporte | Nada nuevo hacia afuera; Baileys queda detrás de la interfaz y aparece `MemoryTransport` | — |
 | F2 | Modelo de conversación y captura de inbound | Los mensajes entrantes se persisten y deduplican. Nadie los lee todavía | F1 |
 | F3 | Credenciales con identidad | Varias API keys, cada una un principal con scope. La key única actual sigue andando como `scope: all` | — |
-| F4 | Lectura por cursor, permisos y huecos | Un consumidor lee **sus** conversaciones y sabe qué perdió | F2, F3 |
+| F4 | Entrega: cursor, permisos y huecos | Un consumidor lee **sus** conversaciones y sabe qué perdió | F2, F3 |
+| F4b | Entrega por webhook | Un consumidor de larga vida recibe el mensaje empujado, con el cursor como recuperación | F4 |
 | F5 | Respuesta y carril conversacional | Un consumidor responde dentro de una conversación | F4 |
 | F6 | Compatibilidad | Los endpoints viejos traducen al modelo nuevo; queda un solo camino de código | F5 |
 
@@ -200,6 +236,10 @@ GET    /conversations/:id                  metadatos
 GET    /conversations/:id/messages?since=  leer con cursor
 POST   /conversations/:id/messages         responder
 POST   /conversations/:id/read             marcar leído hasta un seq
+
+POST   /subscriptions                      registrar webhook de un principal
+GET    /subscriptions                      ver los propios
+DELETE /subscriptions/:id
 
 POST   /principals                         alta de credencial (scope: all)
 POST   /conversations/:id/grants           conceder acceso a un principal
@@ -218,6 +258,8 @@ existe, y eso ya filtra información sobre con quién habla la cuenta.
 | Reentrega del proveedor | El `UNIQUE (conversation_id, external_id)` la absorbe. No genera duplicado |
 | Media entrante que no baja | El mensaje se guarda con `media_id` nulo y una marca de error. El texto no se pierde por culpa del adjunto |
 | Cursor anterior a la retención | Se responde con `gap` (D5) |
+| Consumidor de webhook caído | Reintento con backoff acotado, después se abandona. El mensaje queda en el almacén y se recupera por cursor (D4) |
+| Webhook entregado dos veces | El consumidor deduplica por `id` o `seq`, que van en cada mensaje (D4) |
 | Conversación sin grant | 404 |
 
 ## Testing
@@ -243,8 +285,8 @@ Cobertura mínima por fase:
 
 Se dejan afuera a propósito, y ninguno requiere rediseñar lo de arriba:
 
-- Webhooks y SSE — se montan encima del cursor cuando haya un consumidor que los
-  justifique
+- SSE — el cursor y el webhook cubren los dos perfiles de consumidor que existen
+  hoy; un tercer mecanismo sin un consumidor que lo pida es especular
 - Adaptador de Telegram u otro canal real — el puerto lo permite; construirlo
   sin necesidad concreta es especular
 - Reacciones, hilos, edición y borrado de mensajes

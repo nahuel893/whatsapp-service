@@ -211,12 +211,77 @@ Se implementan dos adaptadores desde el arranque:
 `capabilities()` existe porque los canales difieren de verdad. Un consumidor que
 asuma que todos soportan `reply_to` se rompe en el primer canal que no.
 
+## Contrato de compatibilidad
+
+Verificado el 2026-09-10 contra `lib/api.js` y contra los dos consumidores
+conocidos. Ambos chequean **sólo el status code HTTP** y ninguno lee campos del
+body — pero `/queue/status` y `/queue/job/:id` existen para ser pollados, así que
+el contrato se congela entero, no sólo lo que hoy se sabe leído.
+
+### Formas congeladas
+
+| Endpoint | Respuesta que no puede cambiar |
+|---|---|
+| `POST /send-text` | `{ok, queued, job_id}` |
+| `POST /send-image` | `{success, queued, job_id, message}` |
+| `POST /send-file` | `{success, queued, job_id, message}` |
+| `POST /send-file-dm` | `{ok, queued, job_id}` |
+| `GET /status` | `{connected, phone, connectedAt}` |
+| `GET /queue/status` | `{pending, processing, minDelayMs, maxDelayMs, recent[]}` |
+| `GET /queue/job/:id` | `{ok, job{...}}` |
+| `GET /groups` | `{ok, count, groups[]}` |
+| `GET /health` | `{status, uptimeSeconds, whatsapp{}, queue{}}` |
+
+**La inconsistencia `ok` vs `success` es parte del contrato.** Dos endpoints
+devuelven uno y dos el otro, y dos agregan `message`. Feo, pero normalizarlo es
+romper. Se congela como está.
+
+Además:
+
+- **`job_id` es un entero**, de `AUTOINCREMENT`. El modelo nuevo usa ids
+  `msg_<random>`; los endpoints viejos **siguen devolviendo el entero**, y
+  `/queue/job/:id` sigue aceptando sólo enteros (`Number.isInteger`, `> 0`).
+- **`recent[]`** conserva `{id, type, target, status, error, finishedAt}`, con
+  `type` en `text | image | file | file-dm` y `status` en
+  `pending | processing | sent | error`.
+- **`resolveJid`** no cambia: con `@` se usa tal cual, sólo numérico va a
+  `@s.whatsapp.net`, y un nombre de grupo se resuelve contra los participantes.
+- **`/send-text` exige `@s.whatsapp.net`** y devuelve 400 si no.
+- **`API_KEY` vacía deja todo abierto.** D3 agrega principals, pero la ausencia
+  de credenciales configuradas sigue siendo "sin autenticación", o el pipeline
+  de reportes deja de entregar.
+- **503 `session_not_ready`** cuando WhatsApp no está conectado.
+
+### La regresión que ningún test de forma detecta
+
+Los endpoints viejos tienen que caer en el carril **`bulk`** (D6), conservando
+el pacing de hoy. Si por descuido quedaran en `conversation`, las respuestas
+seguirían siendo idénticas y todos los tests pasarían — pero un envío masivo de
+80 informes saldría sin ningún espaciado, que es exactamente lo que hace que
+WhatsApp marque la cuenta como bot.
+
+El carril por default es parte del contrato, y necesita su propio test.
+
+### Cómo se garantiza
+
+**F0 — tests golden, escritos antes de F1 y nunca modificados después.**
+
+Capturan el comportamiento observable de hoy: cada forma de respuesta, los tipos
+de `job_id`, la resolución de targets, los códigos de error, el carril por
+default. Se escriben contra el código actual, con todo en verde antes de tocar
+nada.
+
+De ahí en más son el detector: si una fase los pone en rojo, esa fase rompió a un
+consumidor. **Ponerlos en verde editándolos es tapar la rotura, no arreglarla** —
+sólo se tocan si el cambio de contrato es una decisión explícita y anotada acá.
+
 ## Subsistemas y orden
 
 Cada fase es entregable y verificable por separado.
 
 | # | Fase | Qué deja funcionando | Depende de |
 |---|---|---|---|
+| F0 | Tests golden de compatibilidad | Red de seguridad: el comportamiento de hoy queda capturado antes de tocar nada | — |
 | F1 | Puerto de transporte | Nada nuevo hacia afuera; Baileys queda detrás de la interfaz y aparece `MemoryTransport` | — |
 | F2 | Modelo de conversación y captura de inbound | Los mensajes entrantes se persisten y deduplican. Nadie los lee todavía | F1 |
 | F3 | Credenciales con identidad | Varias API keys, cada una un principal con scope. La key única actual sigue andando como `scope: all` | — |
@@ -225,7 +290,8 @@ Cada fase es entregable y verificable por separado.
 | F5 | Respuesta y carril conversacional | Un consumidor responde dentro de una conversación | F4 |
 | F6 | Compatibilidad | Los endpoints viejos traducen al modelo nuevo; queda un solo camino de código | F5 |
 
-F1 y F3 son independientes y se pueden hacer en cualquier orden.
+F0 va primero, siempre. F1 y F3 son independientes entre sí y se pueden hacer
+en cualquier orden después.
 
 ## API
 
@@ -279,7 +345,10 @@ Cobertura mínima por fase:
   entre dos principals sobre la misma conversación.
 - **F5** — respuesta encolada y entregada, carril conversacional sin delay,
   carril bulk con delay.
-- **F6** — cada endpoint viejo produce el mismo resultado observable que antes.
+- **F0** — los golden corren en verde contra el código actual antes de que
+  empiece F1, y siguen verdes al terminar cada fase.
+- **F6** — cada endpoint viejo produce el mismo resultado observable que antes,
+  y encola en el carril `bulk`.
 
 ## Fuera de alcance
 

@@ -192,6 +192,38 @@ describe("POST /send-file", () => {
     assert.equal(sent[0].jid, "123@g.us");
   });
 
+  test("un grupo que no existe FALLA en vez de darse por enviado", async () => {
+    // El bug que costo meses de envios perdidos: cuando el grupo no se
+    // resolvia, se le sacaban las letras al nombre y se armaba un telefono.
+    // "Preventa Salta" quedaba en "@s.whatsapp.net" —destinatario vacio—,
+    // Baileys lo aceptaba sin error y el job se marcaba "sent".
+    await startApp();
+    const form = new FormData();
+    form.set("group_name", "Grupo Que No Existe");
+    form.set("file", new Blob([Buffer.from("x")], { type: "text/plain" }), "a.txt");
+
+    const res = await fetch(`${baseUrl}/send-file`, { method: "POST", body: form });
+    const { job_id: jobId } = await res.json();
+    await drained();
+
+    assert.equal(sent.length, 0, "no se manda nada a un destino que no se pudo resolver");
+    const job = await (await fetch(`${baseUrl}/queue/job/${jobId}`)).json();
+    assert.equal(job.job.status, "error");
+    assert.match(job.job.error, /No existe un grupo/);
+  });
+
+  test("nunca arma un JID vacio a partir de un nombre sin digitos", async () => {
+    await startApp();
+    const form = new FormData();
+    form.set("group_name", "equipo ventas");
+    form.set("file", new Blob([Buffer.from("x")], { type: "text/plain" }), "a.txt");
+
+    await fetch(`${baseUrl}/send-file`, { method: "POST", body: form });
+    await drained();
+    assert.notEqual(sent[0].jid, "@s.whatsapp.net");
+    assert.ok(sent[0].jid.endsWith("@g.us"), "un nombre de grupo resuelve a un JID de grupo");
+  });
+
   test("rejects a request with no file", async () => {
     await startApp();
     const form = new FormData();

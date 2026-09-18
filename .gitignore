@@ -15,5 +15,15 @@ node_modules/
 # ── OS ────────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-# Local Pi runtime state
+
+# ── Agent tooling — local config, not part of the service ─────────────────
+# Each of these is dropped in by a coding-agent CLI. They describe the
+# developer's tooling, not this service, and must not reach the public repo.
 .atl/
+.agents/
+.claude/
+.codebuddy/
+.continue/
+.junie/
+.kiro/
+skills-lock.json

@@ -100,6 +100,7 @@ whatsapp-service/
 │   ├── session-store.js      # useMultiFileAuthState wrapper (official Baileys)
 │   └── config.js             # Env vars + getters
 ├── test/                     # node:test — sin dependencias de testing
+│   └── golden/               # Contrato congelado (F0). NO se editan para ponerlos en verde
 ├── Dockerfile                # Imagen node:24-slim
 ├── session/                  # Auth state actual (gitignored)
 ├── session.bak-*/            # Backups previos (gitignored)
@@ -116,12 +117,18 @@ y `session.dead-*/` de una sola vez. **No lo angostes.**
 ### Tests
 
 ```bash
-npm test        # node --test 'test/*.test.js'
+npm test        # node --test 'test/**/*.test.js'
 ```
 
 Corren sin red y sin WhatsApp: los tests de API levantan Express contra un doble
 de Baileys que registra los envíos en vez de mandarlos. No hay framework de
 testing instalado — todo es `node:test`, built-in.
+
+⚠️ **`test/golden/` es el contrato con los consumidores actuales** (formas de
+respuesta, `job_id`, resolución de targets, errores, pacing de la cola). Si un
+cambio los pone en rojo, ese cambio rompe a alguien: se arregla el código, no el
+test. Sólo se editan cuando el cambio de contrato es una decisión explícita
+anotada en `docs/superpowers/specs/2026-09-01-chat-bidireccional-design.md`.
 
 ---
 

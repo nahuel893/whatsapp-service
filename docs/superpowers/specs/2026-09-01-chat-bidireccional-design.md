@@ -275,6 +275,12 @@ De ahí en más son el detector: si una fase los pone en rojo, esa fase rompió 
 consumidor. **Ponerlos en verde editándolos es tapar la rotura, no arreglarla** —
 sólo se tocan si el cambio de contrato es una decisión explícita y anotada acá.
 
+**Estado: F0 hecho (2026-09-24).** Viven en `test/golden/`, con su propio
+harness (`_frozen-harness.js`) que no comparte nada con `test/api.test.js`. 41
+tests, en verde contra el código actual. Un hallazgo al escribirlos: el 401 de
+auth trae `{ok, error, message}`, no sólo `{ok, error}` — también quedó
+congelado.
+
 ## Subsistemas y orden
 
 Cada fase es entregable y verificable por separado.

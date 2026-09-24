@@ -47,35 +47,36 @@ distinta, `publicPaths`). No hay brecha ahí.
 
 ## Tareas
 
-- [ ] **T1 — Limpiar el working tree.** Commit de `.gitignore` (agrega `.atl/`) y
-      commit separado de `engineering-workflow.md`. Deja el diff de F0 legible.
-- [ ] **T2 — Scaffolding golden.** Crear `test/golden-compat.test.js` autocontenido:
-      doble de Baileys, arranque de Express sobre store temporal, helper `drained()`,
-      y el encabezado que declara la regla de "no se editan". Un test trivial que
-      pase, para fijar la infraestructura.
-- [ ] **T3 — Formas de respuesta de los 4 endpoints de envío.** Congelar
-      `ok` vs `success`, la presencia de `message` en image/file y su ausencia en
-      file-dm, y `queued: true`. Cubre las dos brechas totales (`/send-image`,
-      `/send-file-dm`). **Esta es la tarea de mayor valor.**
-- [ ] **T4 — Identidad de `job_id`.** Entero positivo, `Number.isInteger`, monótono
-      creciente entre envíos sucesivos. Y `/queue/job/:id`: 400 para `abc`, `0`,
-      negativo, `1.5`; 404 para un entero inexistente.
-- [ ] **T5 — Formas de lectura.** `/status`, `/queue/status` (incluida la forma de
-      cada elemento de `recent[]` y los valores válidos de `type` y `status`),
-      `/health` (incluido `queue{}`), `/groups`.
-- [ ] **T6 — Resolución de targets.** Tabla completa de `resolveJid`: con `@` se usa
-      tal cual (`@s.whatsapp.net`, `@g.us`, `@lid`), numérico con símbolos va a
-      `@s.whatsapp.net`, nombre de grupo case-insensitive, grupo inexistente falla el
-      job en vez de darse por enviado.
-- [ ] **T7 — Errores.** `503 session_not_ready` con su body en los 5 endpoints que
-      pasan por `requireSession`; 400 por target faltante y por archivo faltante, con
-      la forma exacta de cada uno (la inconsistencia `{error}` pelado se congela).
-- [ ] **T8 — Carril `bulk` por default.** La regresión que ningún test de forma
-      detecta: un envío por los endpoints viejos tiene que respetar el pacing
-      configurado. Con `minDelayMs` alto, el segundo job no sale antes de ese
-      tiempo. Es el test que impide que F5/F6 dejen al daily sin espaciado.
-- [ ] **T9 — Suite completa en verde + commit de F0.**
-- [ ] **T10 — Anotar F0 como hecho** en el diseño y en `AGENTS.md`.
+> Cambio de layout respecto del plan original: en vez de un único
+> `test/golden-compat.test.js`, los golden viven en `test/golden/` (un archivo
+> por tarea) y comparten sólo `test/golden/_frozen-harness.js`, que a su vez no
+> comparte nada con `test/api.test.js`. La regla de aislamiento se mantiene.
+
+- [x] **T1 — Limpiar el working tree.** `201b931`, `4a135d3`, `90019c0`.
+- [x] **T2 — Scaffolding golden.** `51fd12f` (glob recursivo), `6ae489c` (harness).
+- [x] **T3 — Formas de respuesta de los 4 endpoints de envío.** `933b007` —
+      `test/golden/send-responses.test.js`. Incluye qué contenido recibe Baileys.
+- [x] **T4 — Identidad de `job_id`.** `274abf3` — `test/golden/job-id.test.js`.
+- [x] **T5 — Formas de lectura.** `37a5b2f` — `test/golden/read-shapes.test.js`.
+- [x] **T6 — Resolución de targets.** `5543d68` — `test/golden/target-resolution.test.js`.
+- [x] **T7 — Errores.** `516028a` — `test/golden/errors.test.js`. Hallazgo: el
+      401 de auth trae también `message`; congelado tal cual.
+- [x] **T8 — Carril `bulk` por default.** `aad4783` — `test/golden/bulk-pacing.test.js`.
+      Delay antes de cada envío, un job a la vez, orden FIFO.
+- [x] **T9 — Suite completa en verde.** `npm test`: 92/92, tres corridas
+      seguidas sin flakes (2026-09-24).
+- [x] **T10 — Anotar F0 como hecho** en el diseño y en `AGENTS.md`.
+
+## Verificación de F0
+
+- Modo: captura de comportamiento (los golden arrancan en verde, no hay RED).
+- Runner: `npm test` → `node --test 'test/**/*.test.js'`.
+- Rama: `test/f0-golden-compat`. Sin pushear.
+
+## Próximo paso
+
+F1 — puerto de transporte (`ChatTransport` + `MemoryTransport`, Baileys detrás
+de la interfaz). No autorizado todavía.
 
 ## Fases siguientes (no autorizadas todavía)
 

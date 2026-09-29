@@ -208,6 +208,25 @@ Se implementan dos adaptadores desde el arranque:
   que valida que la abstracción sirva. Una interfaz con un solo implementador no
   está probada, está supuesta.
 
+**Estado: F1 hecho (2026-09-29).** `lib/transport/{contract,memory,baileys}.js`.
+Ambos adaptadores pasan la misma suite (`test/transport/contract-suite.js`).
+Decisiones tomadas al implementarlo:
+
+- **Formato de direcciones:** `whatsapp:+<dígitos>` (contacto), `whatsapp:group:<id>`
+  (grupo), `whatsapp:lid:<id>` (contacto sin teléfono conocido). Un entrante con
+  `@lid` se reporta por teléfono cuando WhatsApp manda `remoteJidAlt` /
+  `participantAlt`.
+- **`InboundMessage`** = `{externalId, address, author, text, at}`. `address` es
+  la conversación; `author`, quien escribió (difieren en grupos). `text` es
+  `null` si el mensaje no trae texto. Se descartan los propios (`fromMe`), los
+  estados, el historial (`append`) y las direcciones sin forma URI.
+- **Targets viejos:** números sueltos y nombres de grupo se resuelven en
+  `BaileysTransport.resolveLegacyTarget()`, una extensión del adaptador que no es
+  parte del puerto. F6 la reemplaza.
+- **`createRouter` conserva su firma** porque el harness de los golden le pasa un
+  doble del manager: construye el transporte adentro salvo que llegue
+  `options.transport`.
+
 `capabilities()` existe porque los canales difieren de verdad. Un consumidor que
 asuma que todos soportan `reply_to` se rompe en el primer canal que no.
 

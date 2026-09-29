@@ -94,6 +94,10 @@ whatsapp-service/
 ├── lib/
 │   ├── baileys.js            # Connection manager (createManager) — MODIFICADO para v7
 │   ├── api.js                # Routes HTTP + handlers por tipo de job
+│   ├── transport/            # Puerto ChatTransport (F1 del chat bidireccional)
+│   │   ├── contract.js       # Typedefs del puerto + assertTransport()
+│   │   ├── baileys.js        # Adaptador WhatsApp: único lugar que conoce los JID
+│   │   └── memory.js         # Adaptador sin red; segundo implementador del puerto
 │   ├── auth.js               # Middleware de API key
 │   ├── job-store.js          # Persistencia de la cola (node:sqlite)
 │   ├── message-queue.js      # Cola persistente con delay/warmup
@@ -263,7 +267,11 @@ curl -X POST http://localhost:3001/send-image \
   -F "image=@captura.png"
 ```
 
-### Resolución de targets (`api.js:resolveJid`)
+### Resolución de targets (`transport/baileys.js:resolveLegacyTarget`)
+
+Desde F1 los envíos no llaman a `sock.sendMessage` desde `api.js`: pasan por el
+`ChatTransport`. La resolución de targets de los endpoints viejos vive en el
+adaptador de WhatsApp, con las mismas reglas de siempre:
 
 - Si `to` contiene `@`: se usa tal cual (asume JID válido)
 - Si es solo numérico: se mappea a `<num>@s.whatsapp.net`

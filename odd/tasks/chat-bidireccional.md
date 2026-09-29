@@ -73,10 +73,55 @@ distinta, `publicPaths`). No hay brecha ahí.
 - Runner: `npm test` → `node --test 'test/**/*.test.js'`.
 - Rama: `test/f0-golden-compat`. Sin pushear.
 
+## F1 — Puerto de transporte
+
+Autorizado el 2026-09-29 ("continua"). Rama `feat/f1-transport-port`, apilada
+sobre `test/f0-golden-compat`. TDD estricto (RED → GREEN), runner `npm test`.
+
+**Qué deja:** nada nuevo hacia afuera. Los envíos de los endpoints viejos pasan
+por un `ChatTransport`; Baileys queda detrás de la interfaz y aparece
+`MemoryTransport` como segundo implementador.
+
+**Restricción de compatibilidad:** `test/golden/_frozen-harness.js` le pasa a
+`createRouter` un doble del *manager* de Baileys (`getStatus`, `getSock`,
+`waitForWarmup`). Por eso `createRouter(baileysMgr, queue, opts)` conserva su
+firma: el transporte se construye adentro a partir del manager, salvo que llegue
+uno en `opts.transport`. Los golden no se tocan.
+
+**Decisión — resolución de targets viejos:** números sueltos y nombres de grupo
+son addressing de WhatsApp, no del dominio. Se mueven a
+`BaileysTransport.resolveLegacyTarget()`, una extensión del adaptador que **no**
+es parte del puerto. F6 la reemplaza por URIs.
+
+**Formato de direcciones (`whatsapp:`):** `whatsapp:+<dígitos>` para un contacto,
+`whatsapp:group:<id>` para un grupo, `whatsapp:lid:<id>` cuando WhatsApp no da
+el teléfono. En un entrante se prefiere `remoteJidAlt`/`participantAlt` (el
+teléfono) sobre el `@lid`.
+
+- [x] **F1.1 — Contrato del puerto.** `54408c3`. `lib/transport/contract.js`: typedefs y
+      `assertTransport()`. Suite de contrato reutilizable en
+      `test/transport/contract-suite.js`.
+- [x] **F1.2 — `MemoryTransport`.** `54408c3`. `lib/transport/memory.js`, pasa la suite.
+- [x] **F1.3 — `BaileysTransport`.** `0b6a5ed`. `lib/transport/baileys.js` sobre el manager,
+      pasa la misma suite con el socket mockeado. Incluye mapeo de entrantes y
+      `resolveLegacyTarget`. `manager.onEvent` pasa a devolver un unsubscribe.
+- [x] **F1.4 — El router envía por el transporte.** `b6a3ce3`. `lib/api.js` deja de llamar a
+      `sock.sendMessage`. Golden en verde sin tocarlos.
+- [x] **F1.5 — Docs.** Diseño, `AGENTS.md`.
+
+### Verificación de F1
+
+- RED observado antes de cada implementación (módulos inexistentes; router que
+  ignoraba `options.transport`).
+- `npm test`: 135/135, dos corridas seguidas. Los 41 golden, sin editar.
+- `index.js` no cambió: sigue conectando por el manager.
+
 ## Próximo paso
 
-F1 — puerto de transporte (`ChatTransport` + `MemoryTransport`, Baileys detrás
-de la interfaz). No autorizado todavía.
+F2 (inbound persistido) o F3 (credenciales con identidad) — independientes.
+Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
+(nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
+invalidar en un miss).
 
 ## Fases siguientes (no autorizadas todavía)
 

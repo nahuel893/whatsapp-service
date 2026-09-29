@@ -18,6 +18,9 @@ const { createManager } = require("./lib/baileys");
 const { createRouter } = require("./lib/api");
 const { createJobStore } = require("./lib/job-store");
 const { createMessageQueue } = require("./lib/message-queue");
+const { createBaileysTransport } = require("./lib/transport/baileys");
+const { createConversationStore } = require("./lib/conversation-store");
+const { createInboundCapture } = require("./lib/inbound-capture");
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -27,6 +30,9 @@ const baileysMgr = createManager({
   sessionDir: config.SESSION_DIR,
   printQR: config.printQR,
 });
+// One transport for the whole process: the router sends through it and the
+// inbound capture listens on it.
+const transport = createBaileysTransport(baileysMgr, { logger });
 const jobStore = createJobStore({ dbPath: config.QUEUE_DB_PATH });
 const messageQueue = createMessageQueue({
   store: jobStore,
@@ -40,13 +46,27 @@ const messageQueue = createMessageQueue({
 app.use(createRouter(baileysMgr, messageQueue, {
   warmupMs: config.WHATSAPP_WARMUP_MS,
   apiKey: config.API_KEY,
+  transport,
 }));
+
+// ── Inbound capture (opt-in) ─────────────────────────────────────────────
+// Subscribed before connecting, so no message of the first sync is missed.
+const chatStore = config.INBOUND_CAPTURE
+  ? createConversationStore({ dbPath: config.CHAT_DB_PATH })
+  : null;
+if (chatStore) {
+  createInboundCapture({ transport, store: chatStore, logger });
+}
 
 // ── Listen ───────────────────────────────────────────────────────────────
 const server = app.listen(config.PORT, config.HOST, () => {
   logger.info({ port: config.PORT, host: config.HOST }, "WhatsApp Service iniciado");
   logger.info({ sessionDir: config.SESSION_DIR }, "Directorio de sesión");
   logger.info({ queueDb: config.QUEUE_DB_PATH }, "Base de datos de la cola");
+  logger.info(
+    { enabled: config.INBOUND_CAPTURE, chatDb: config.INBOUND_CAPTURE ? config.CHAT_DB_PATH : null },
+    "Captura de mensajes entrantes"
+  );
 
   if (!config.API_KEY) {
     logger.warn(
@@ -67,7 +87,7 @@ const server = app.listen(config.PORT, config.HOST, () => {
     logger.warn({ jobs: recovered }, "Jobs interrumpidos reencolados");
   }
 
-  baileysMgr.connect().catch((err) => {
+  transport.connect().catch((err) => {
     logger.error({ err }, "Error conectando WhatsApp");
   });
 });
@@ -82,6 +102,11 @@ function shutdown(signal) {
       jobStore.close();
     } catch (err) {
       logger.error({ err }, "Error cerrando la base de datos de la cola");
+    }
+    try {
+      chatStore?.close();
+    } catch (err) {
+      logger.error({ err }, "Error cerrando la base de datos de conversaciones");
     }
     process.exit(0);
   });

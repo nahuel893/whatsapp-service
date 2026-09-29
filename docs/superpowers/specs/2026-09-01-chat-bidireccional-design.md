@@ -300,6 +300,13 @@ tests, en verde contra el código actual. Un hallazgo al escribirlos: el 401 de
 auth trae `{ok, error, message}`, no sólo `{ok, error}` — también quedó
 congelado.
 
+**Procedencia de los golden de resolución de targets.** Congelan el
+comportamiento *posterior* a `e2b62b2` (fix de `resolveJid`), no el anterior.
+Antes de ese fix, un nombre de grupo que no se encontraba se convertía en un
+teléfono inventado y el job quedaba `sent` hacia nadie; ahora el job falla con
+el motivo. Es un cambio de contrato deliberado —el comportamiento viejo perdía
+mensajes en silencio— y es el que los golden protegen de acá en más.
+
 ## Subsistemas y orden
 
 Cada fase es entregable y verificable por separado.

@@ -244,14 +244,37 @@ describe("BaileysTransport — provider specifics", () => {
       assert.equal(received.length, 0);
     });
 
-    test("a throwing handler does not stop the others", () => {
-      const { fake, received } = setup();
-      const transport = createBaileysTransport(fake.manager);
+    test("a throwing handler does not stop the ones registered after it", () => {
+      const fake = createFakeManager();
+      const transport = createBaileysTransport(fake.manager, { logger: { warn() {} } });
+      const received = [];
       transport.onMessage(() => {
         throw new Error("boom");
       });
+      transport.onMessage((msg) => received.push(msg));
       fake.upsert([inboundFor(`whatsapp:+${PHONE}`, "hola")]);
       assert.equal(received.length, 1);
+    });
+
+    test("a rejecting async handler is contained, not left unhandled", async () => {
+      const fake = createFakeManager();
+      const warnings = [];
+      const transport = createBaileysTransport(fake.manager, { logger: { warn: (m) => warnings.push(m) } });
+      const unhandled = [];
+      const onUnhandled = (reason) => unhandled.push(reason);
+      process.on("unhandledRejection", onUnhandled);
+      try {
+        transport.onMessage(async () => {
+          throw new Error("async boom");
+        });
+        fake.upsert([inboundFor(`whatsapp:+${PHONE}`, "hola")]);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      } finally {
+        process.off("unhandledRejection", onUnhandled);
+      }
+      assert.deepEqual(unhandled, []);
+      assert.equal(warnings.length, 1);
+      assert.match(warnings[0], /async boom/);
     });
   });
 

@@ -115,6 +115,11 @@ teléfono) sobre el `@lid`.
   ignoraba `options.transport`).
 - `npm test`: 135/135, dos corridas seguidas. Los 41 golden, sin editar.
 - `index.js` no cambió: sigue conectando por el manager.
+- Revisión RDD aprobada (lineage `review-0dd194c22e125bdf`). Hallazgos propios
+  de F1 corregidos en `041e443`: `disconnect()` cancela el reconectar pendiente
+  e ignora eventos de sockets reemplazados; handlers async de entrantes que
+  rechazan quedan contenidos. **Sin test unitario** para el fix del manager
+  (`lib/baileys.js` importa Baileys dinámicamente y no hay doble para eso).
 
 ## Próximo paso
 

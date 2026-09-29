@@ -69,7 +69,7 @@ En el primer arranque imprime un QR en los logs. Escanealo desde el celular:
 queda en `session/` y sobrevive a los reinicios.
 
 ```bash
-npm test    # 136 tests, sin red y sin WhatsApp real
+npm test    # 161 tests, sin red y sin WhatsApp real
 ```
 
 ---
@@ -238,7 +238,7 @@ lib/
   message-queue.js       cola secuencial con delay y warmup
   session-store.js       wrapper de useMultiFileAuthState
   config.js              variables de entorno
-test/                    136 tests con node:test (golden/ = contrato congelado)
+test/                    161 tests con node:test (golden/ = contrato congelado)
 ```
 
 ---

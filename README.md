@@ -89,6 +89,8 @@ solo.
 | `DATA_DIR` | `./data` | Estado del servicio (base de la cola) |
 | `QUEUE_DB_PATH` | `$DATA_DIR/queue.db` | Archivo SQLite de la cola |
 | `QUEUE_RETENTION_DAYS` | `30` | Días de jobs terminados que se conservan |
+| `INBOUND_CAPTURE` | `false` | `true` persiste los mensajes entrantes en `chat.db`. **Escribe a disco todos los chats del número** |
+| `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones y mensajes |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras conectar, antes del primer envío |
@@ -230,6 +232,9 @@ lib/
   api.js                 endpoints HTTP y handlers por tipo de job
   auth.js                middleware de API key
   job-store.js           persistencia de la cola (node:sqlite)
+  conversation-store.js  conversaciones y mensajes entrantes (chat.db)
+  inbound-capture.js     guarda lo que llega; opt-in con INBOUND_CAPTURE
+  transport/             puerto ChatTransport + adaptadores Baileys y memoria
   message-queue.js       cola secuencial con delay y warmup
   session-store.js       wrapper de useMultiFileAuthState
   config.js              variables de entorno

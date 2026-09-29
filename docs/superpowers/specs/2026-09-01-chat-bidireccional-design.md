@@ -208,6 +208,21 @@ Se implementan dos adaptadores desde el arranque:
   que valida que la abstracción sirva. Una interfaz con un solo implementador no
   está probada, está supuesta.
 
+**Estado: F2 hecho (2026-09-29).** `lib/conversation-store.js` (base propia,
+`chat.db`) y `lib/inbound-capture.js`, prendida con `INBOUND_CAPTURE=true`.
+Decisiones:
+
+- **Captura opt-in.** Guardar lo entrante es escribir a disco todos los chats
+  del número; eso se prende a propósito, no por actualizar.
+- **`undecryptable` se completa en su lugar.** Baileys emite un stub
+  `CIPHERTEXT`, pide reintento, y el mensaje descifrado llega con el **mismo
+  id**. Deduplicar a secas por `external_id` descartaría el mensaje bueno: el
+  almacén actualiza la fila existente conservando su `seq`. La inversa (un
+  `undecryptable` que llega después de uno legible) se ignora.
+- `InboundMessage` gana `status: "received" | "undecryptable"`.
+- Sin retención todavía: `pruned_through_seq` existe pero nada purga. Llega con
+  F4 junto con el reporte de huecos (D5).
+
 **Estado: F1 hecho (2026-09-29).** `lib/transport/{contract,memory,baileys}.js`.
 Ambos adaptadores pasan la misma suite (`test/transport/contract-suite.js`).
 Decisiones tomadas al implementarlo:

@@ -141,20 +141,28 @@ todavía (eso es F4).
 - `InboundMessage` gana `status: "received" | "undecryptable"` (cambio del
   contrato de F1, que todavía no tiene consumidores).
 
-- [ ] **F2.1 — `InboundMessage.status`** en el contrato, en ambos adaptadores y
+- [x] **F2.1 — `InboundMessage.status`** `89657ac`. en el contrato, en ambos adaptadores y
       en la suite. Baileys mapea `messageStubType === CIPHERTEXT` a
       `undecryptable` con `text: null`.
-- [ ] **F2.2 — `lib/conversation-store.js`.** Esquema `conversations` +
+- [x] **F2.2 — `lib/conversation-store.js`.** `5886288`. Esquema `conversations` +
       `messages`, `resolveConversation`, `recordInbound` (dedup por
       `(conversation_id, external_id)`, `seq` monótono, upgrade de
       `undecryptable`), `listMessages`.
-- [ ] **F2.3 — `lib/inbound-capture.js`** + cableado en `index.js` detrás de
+- [x] **F2.3 — `lib/inbound-capture.js`** `6c764ad`. + cableado en `index.js` detrás de
       `INBOUND_CAPTURE`. Config nueva en `lib/config.js`.
-- [ ] **F2.4 — Docs.**
+- [x] **F2.4 — Docs.**
+
+### Verificación de F2
+
+- RED observado antes de cada implementación.
+- `npm test`: 161/161. Golden sin editar.
+- Smoke real de `index.js` con sesión vacía temporal, puerto 3099 y captura
+  prendida: arranca, crea `chat.db`, `/health` 200, apagado ordenado. No se
+  probó la captura contra WhatsApp real (requiere parear otra sesión).
 
 ## Próximo paso
 
-F2 en curso.
+F3 (credenciales con identidad) y luego F4 (lectura por cursor + retención).
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

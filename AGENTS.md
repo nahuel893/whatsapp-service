@@ -10,6 +10,10 @@ Abstracción genérica de Baileys (WhatsApp Web) como API HTTP standalone. Cualq
 
 **NO** incluye lógica de agente, allowlist, dedup, ni forwarding de mensajes entrantes — eso queda del lado del consumidor.
 
+> En curso: chat bidireccional (`docs/superpowers/specs/2026-09-01-chat-bidireccional-design.md`).
+> Desde F2 el servicio **puede guardar** los mensajes entrantes (`INBOUND_CAPTURE=true`,
+> apagado por default), pero todavía no los entrega a nadie.
+
 ## Stack actual
 
 - **Node.js** 20+
@@ -100,6 +104,8 @@ whatsapp-service/
 │   │   └── memory.js         # Adaptador sin red; segundo implementador del puerto
 │   ├── auth.js               # Middleware de API key
 │   ├── job-store.js          # Persistencia de la cola (node:sqlite)
+│   ├── conversation-store.js # Conversaciones + mensajes entrantes (chat.db, F2)
+│   ├── inbound-capture.js    # Transporte → almacén; opt-in con INBOUND_CAPTURE
 │   ├── message-queue.js      # Cola persistente con delay/warmup
 │   ├── session-store.js      # useMultiFileAuthState wrapper (official Baileys)
 │   └── config.js             # Env vars + getters
@@ -151,6 +157,8 @@ Node lo carga solo (`process.loadEnvFile()`, sin dependencia).
 | `DATA_DIR` | `./data` | Estado del servicio (base de la cola) |
 | `QUEUE_DB_PATH` | `$DATA_DIR/queue.db` | Archivo SQLite de la cola |
 | `QUEUE_RETENTION_DAYS` | `30` | Días de jobs terminados que se conservan |
+| `INBOUND_CAPTURE` | `false` | `true` persiste los mensajes entrantes en `chat.db`. **Escribe a disco todos los chats del número** |
+| `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones y mensajes |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras `connection: open` antes del primer envío |

@@ -127,7 +127,15 @@ function runTransportContract(name, makeFixture) {
 
       assert.equal(received.length, 1);
       const [msg] = received;
-      assert.deepEqual(Object.keys(msg).sort(), ["address", "at", "author", "externalId", "text"]);
+      assert.deepEqual(Object.keys(msg).sort(), [
+        "address",
+        "at",
+        "author",
+        "externalId",
+        "status",
+        "text",
+      ]);
+      assert.equal(msg.status, "received");
       assert.equal(msg.address, addresses[0]);
       assert.equal(typeof msg.author, "string");
       assert.equal(msg.text, "buenas");

@@ -220,6 +220,33 @@ describe("BaileysTransport — provider specifics", () => {
       assert.deepEqual(received.map((m) => m.text), ["link", "foto", "doc", null]);
     });
 
+    test("a message Baileys could not decrypt is reported as undecryptable", () => {
+      const { fake, received } = setup();
+      fake.upsert([
+        {
+          key: { id: "X", remoteJid: "100000000000000@lid", remoteJidAlt: `${PHONE}@s.whatsapp.net` },
+          messageStubType: 2, // proto.WebMessageInfo.StubType.CIPHERTEXT
+          messageStubParameters: ["Bad MAC"],
+          messageTimestamp: 1_767_225_600,
+        },
+      ]);
+      assert.equal(received.length, 1);
+      assert.deepEqual(received[0], {
+        externalId: "X",
+        address: `whatsapp:+${PHONE}`,
+        author: `whatsapp:+${PHONE}`,
+        text: null,
+        status: "undecryptable",
+        at: "2026-01-01T00:00:00.000Z",
+      });
+    });
+
+    test("other stubs without content are still ignored", () => {
+      const { fake, received } = setup();
+      fake.upsert([{ key: { id: "Y", remoteJid: `${PHONE}@s.whatsapp.net` }, messageStubType: 20 }]);
+      assert.equal(received.length, 0);
+    });
+
     test("a Long-like timestamp is converted", () => {
       const { fake, received } = setup();
       fake.upsert([

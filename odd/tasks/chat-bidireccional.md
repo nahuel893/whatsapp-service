@@ -121,9 +121,40 @@ teléfono) sobre el `@lid`.
   rechazan quedan contenidos. **Sin test unitario** para el fix del manager
   (`lib/baileys.js` importa Baileys dinámicamente y no hay doble para eso).
 
+## F2 — Modelo de conversación y captura de inbound
+
+Autorizado el 2026-09-29 ("si"). Rama `feat/f2-inbound-capture`, apilada sobre
+F1. TDD estricto, runner `npm test`.
+
+**Qué deja:** los mensajes entrantes se persisten y deduplican. Nadie los lee
+todavía (eso es F4).
+
+**Decisiones:**
+- **Base separada** (`data/chat.db`, `CHAT_DB_PATH`), no `queue.db`: la cola no
+  cambia de esquema y el rollback de la cola sigue intacto.
+- **Captura opt-in** (`INBOUND_CAPTURE=true`). Hoy el servicio no guarda nada de
+  lo que llega; prenderla por default empezaría a escribir a disco los mensajes
+  de todos los chats del número sin que nadie lo pidiera.
+- **`undecryptable` se completa, no se duplica.** Baileys emite un stub
+  `CIPHERTEXT`, pide reintento y el mensaje real llega con el mismo id. El
+  almacén actualiza la fila existente en su mismo `seq`.
+- `InboundMessage` gana `status: "received" | "undecryptable"` (cambio del
+  contrato de F1, que todavía no tiene consumidores).
+
+- [ ] **F2.1 — `InboundMessage.status`** en el contrato, en ambos adaptadores y
+      en la suite. Baileys mapea `messageStubType === CIPHERTEXT` a
+      `undecryptable` con `text: null`.
+- [ ] **F2.2 — `lib/conversation-store.js`.** Esquema `conversations` +
+      `messages`, `resolveConversation`, `recordInbound` (dedup por
+      `(conversation_id, external_id)`, `seq` monótono, upgrade de
+      `undecryptable`), `listMessages`.
+- [ ] **F2.3 — `lib/inbound-capture.js`** + cableado en `index.js` detrás de
+      `INBOUND_CAPTURE`. Config nueva en `lib/config.js`.
+- [ ] **F2.4 — Docs.**
+
 ## Próximo paso
 
-F2 (inbound persistido) o F3 (credenciales con identidad) — independientes.
+F2 en curso.
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

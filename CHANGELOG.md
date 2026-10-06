@@ -17,9 +17,15 @@ anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 - **Agente de referencia** (`examples/claude-agent`): webhook → `claude -p` →
   respuesta, como ejemplo de consumidor completo.
 
+- **`INBOUND_GROUPS`** (default `false`): los mensajes de grupos se descartan
+  antes de guardarse, así ningún consumidor los recibe ni los contesta.
+- `InboundMessage.kind`: `"direct"` o `"group"`.
+
 ### Seguridad
 
 - Los webhooks ya no siguen redirecciones: un 3xx es una entrega fallida.
+- **Los grupos quedan fuera por default.** En la primera prueba real, un
+  agente le respondió a un grupo de trabajo del que el número formaba parte.
 
 ### Documentación
 

@@ -193,6 +193,7 @@ describe("BaileysTransport — provider specifics", () => {
       fake.upsert([inboundFor(`whatsapp:+${PHONE}`, "hola")]);
       assert.equal(received[0].address, `whatsapp:+${PHONE}`);
       assert.equal(received[0].author, `whatsapp:+${PHONE}`);
+      assert.equal(received[0].kind, "direct");
       assert.equal(received[0].at, "2026-01-01T00:00:00.000Z");
     });
 
@@ -207,6 +208,7 @@ describe("BaileysTransport — provider specifics", () => {
       fake.upsert([inboundFor("whatsapp:group:123", "hola grupo")]);
       assert.equal(received[0].address, "whatsapp:group:123");
       assert.equal(received[0].author, "whatsapp:+5491111111111");
+      assert.equal(received[0].kind, "group");
     });
 
     test("text is read from extended text and from media captions", () => {
@@ -237,6 +239,7 @@ describe("BaileysTransport — provider specifics", () => {
         author: `whatsapp:+${PHONE}`,
         text: null,
         status: "undecryptable",
+        kind: "direct",
         at: "2026-01-01T00:00:00.000Z",
       });
     });

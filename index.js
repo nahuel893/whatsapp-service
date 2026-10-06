@@ -77,6 +77,7 @@ if (config.INBOUND_CAPTURE) {
     transport,
     store: chatStore,
     logger,
+    includeGroups: config.INBOUND_GROUPS,
     // Not awaited: webhook retries must never hold up the capture.
     onStored: (event) => {
       webhooks.dispatch(event);
@@ -90,7 +91,7 @@ const server = app.listen(config.PORT, config.HOST, () => {
   logger.info({ sessionDir: config.SESSION_DIR }, "Directorio de sesión");
   logger.info({ queueDb: config.QUEUE_DB_PATH }, "Base de datos de la cola");
   logger.info(
-    { enabled: config.INBOUND_CAPTURE, chatDb: config.CHAT_DB_PATH },
+    { enabled: config.INBOUND_CAPTURE, groups: config.INBOUND_GROUPS, chatDb: config.CHAT_DB_PATH },
     "Captura de mensajes entrantes"
   );
 

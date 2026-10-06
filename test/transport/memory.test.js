@@ -41,6 +41,7 @@ test("MemoryTransport.receive() fills defaults and keeps what the caller gave", 
     author: "memory:bob",
     text: "hola",
     status: "received",
+    kind: "direct",
     at: "2026-01-01T00:00:00.000Z",
   });
   assert.equal(received[1].author, "memory:alice", "author defaults to the conversation address");
@@ -60,4 +61,12 @@ test("MemoryTransport.receive() can simulate a message that could not be decrypt
 
   assert.equal(received[0].status, "undecryptable");
   assert.equal(received[0].text, null, "an undecryptable message carries no text");
+});
+
+test("MemoryTransport.receive() can simulate a group message", () => {
+  const transport = createMemoryTransport();
+  const received = [];
+  transport.onMessage((msg) => received.push(msg));
+  transport.receive({ address: "memory:team", author: "memory:bob", text: "hola", kind: "group" });
+  assert.equal(received[0].kind, "group");
 });

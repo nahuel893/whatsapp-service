@@ -98,7 +98,7 @@ function loadConfig(env) {
   const configPath = JSON.stringify(path.join(__dirname, "..", "lib", "config.js"));
   const out = execFileSync(
     process.execPath,
-    ["-e", `const c=require(${configPath});console.log(JSON.stringify({i:c.INBOUND_CAPTURE,p:c.CHAT_DB_PATH,r:c.CHAT_RETENTION_DAYS}))`],
+    ["-e", `const c=require(${configPath});console.log(JSON.stringify({i:c.INBOUND_CAPTURE,p:c.CHAT_DB_PATH,r:c.CHAT_RETENTION_DAYS,g:c.INBOUND_GROUPS}))`],
     { cwd: tmpDir, env: { PATH: process.env.PATH, ...env } }
   );
   return JSON.parse(out);
@@ -106,7 +106,8 @@ function loadConfig(env) {
 
 test("config: capture is off unless INBOUND_CAPTURE=true, and chat.db lives in DATA_DIR", () => {
   const dataDir = path.join(tmpDir, "data");
-  assert.deepEqual(loadConfig({ DATA_DIR: dataDir }), { i: false, p: path.join(dataDir, "chat.db"), r: 90 });
+  assert.deepEqual(loadConfig({ DATA_DIR: dataDir }), { i: false, p: path.join(dataDir, "chat.db"), r: 90, g: false });
+  assert.equal(loadConfig({ INBOUND_GROUPS: "true" }).g, true);
   assert.equal(loadConfig({ CHAT_RETENTION_DAYS: "7" }).r, 7);
   assert.equal(loadConfig({ DATA_DIR: dataDir, INBOUND_CAPTURE: "1" }).i, false);
   assert.equal(loadConfig({ DATA_DIR: dataDir, INBOUND_CAPTURE: "true" }).i, true);
@@ -137,4 +138,24 @@ test("a failing onStored never breaks the capture", () => {
   });
   assert.doesNotThrow(() => transport.receive({ address: "memory:alice", text: "x", externalId: "A" }));
   assert.equal(store.listMessages(store.resolveConversation("memory:alice").id).length, 1);
+});
+
+test("group messages are dropped by default: not stored, not notified", () => {
+  const stored = [];
+  createInboundCapture({ transport, store, logger, onStored: (e) => stored.push(e) });
+
+  transport.receive({ address: "memory:team", author: "memory:bob", text: "en el grupo", externalId: "G1", kind: "group" });
+  transport.receive({ address: "memory:alice", text: "directo", externalId: "D1" });
+
+  assert.equal(store.findByAddress("memory:team"), null, "no conversation is even created for the group");
+  assert.deepEqual(stored.map((e) => e.message.text), ["directo"]);
+  const skipped = logs.find((l) => l.obj?.reason === "group");
+  assert.ok(skipped, "the drop is logged");
+  assert.equal(JSON.stringify(skipped).includes("en el grupo"), false, "without the text");
+});
+
+test("includeGroups: true captures group messages", () => {
+  createInboundCapture({ transport, store, logger, includeGroups: true });
+  transport.receive({ address: "memory:team", author: "memory:bob", text: "hola", externalId: "G1", kind: "group" });
+  assert.equal(store.listMessages(store.findByAddress("memory:team").id).length, 1);
 });

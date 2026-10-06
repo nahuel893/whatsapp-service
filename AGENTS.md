@@ -158,6 +158,7 @@ Node lo carga solo (`process.loadEnvFile()`, sin dependencia).
 | `QUEUE_DB_PATH` | `$DATA_DIR/queue.db` | Archivo SQLite de la cola |
 | `QUEUE_RETENTION_DAYS` | `30` | Días de jobs terminados que se conservan |
 | `INBOUND_CAPTURE` | `false` | `true` persiste los mensajes entrantes en `chat.db`. **Escribe a disco todos los chats del número** |
+| `INBOUND_GROUPS` | `false` | `true` también captura mensajes de **grupos**. Apagado, un mensaje de grupo se descarta antes de guardarse: ningún consumidor lo ve ni lo puede contestar |
 | `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones, mensajes, principals y grants |
 | `CHAT_RETENTION_DAYS` | `90` | Días de historial de conversación. Lo purgado se reporta como `gap` |
 | `CONVERSATION_MIN_DELAY_MS` / `MAX` | `1500` / `4000` | Piso humano entre una respuesta y el envío anterior |

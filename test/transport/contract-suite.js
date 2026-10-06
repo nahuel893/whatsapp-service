@@ -132,10 +132,12 @@ function runTransportContract(name, makeFixture) {
         "at",
         "author",
         "externalId",
+        "kind",
         "status",
         "text",
       ]);
       assert.equal(msg.status, "received");
+      assert.ok(["direct", "group"].includes(msg.kind), `kind ${msg.kind}`);
       assert.equal(msg.address, addresses[0]);
       assert.equal(typeof msg.author, "string");
       assert.equal(msg.text, "buenas");

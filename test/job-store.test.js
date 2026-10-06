@@ -174,3 +174,74 @@ describe("createJobStore", () => {
     assert.equal(store.pendingCount(), 1);
   });
 });
+
+describe("lanes", () => {
+  test("a job is in the bulk lane unless told otherwise", () => {
+    const { id } = store.enqueue({ type: "text", target: "t" });
+    assert.equal(store.get(id).lane, "bulk");
+    const conv = store.enqueue({ type: "chat-text", target: "t", lane: "conversation" });
+    assert.equal(store.get(conv.id).lane, "conversation");
+  });
+
+  test("an unknown lane is rejected", () => {
+    assert.throws(() => store.enqueue({ type: "text", target: "t", lane: "express" }));
+  });
+
+  test("peekNext prefers the conversation lane, FIFO within a lane", () => {
+    const b1 = store.enqueue({ type: "text", target: "t" }).id;
+    store.enqueue({ type: "text", target: "t" });
+    const c1 = store.enqueue({ type: "chat-text", target: "t", lane: "conversation" }).id;
+    const c2 = store.enqueue({ type: "chat-text", target: "t", lane: "conversation" }).id;
+
+    assert.equal(store.peekNext().id, c1);
+    assert.equal(store.claim(c1).id, c1);
+    assert.equal(store.peekNext().id, c2);
+    store.claim(c2);
+    assert.equal(store.peekNext().id, b1);
+  });
+
+  test("peekNext does not change the job; claim does, exactly once", () => {
+    const { id } = store.enqueue({ type: "text", target: "t" });
+    assert.equal(store.peekNext().status, "pending");
+    assert.equal(store.get(id).status, "pending");
+
+    const claimed = store.claim(id);
+    assert.equal(claimed.status, "processing");
+    assert.equal(claimed.attempts, 1);
+    assert.equal(store.claim(id), null, "a job already claimed cannot be claimed again");
+    assert.equal(store.peekNext(), null);
+  });
+
+  test("claimNext also prefers the conversation lane", () => {
+    store.enqueue({ type: "text", target: "t" });
+    const c = store.enqueue({ type: "chat-text", target: "t", lane: "conversation" }).id;
+    assert.equal(store.claimNext().id, c);
+  });
+
+  test("a queue.db created before lanes existed is migrated in place", () => {
+    const { DatabaseSync } = require("node:sqlite");
+    const legacyPath = path.join(tmpDir, "legacy.db");
+    const legacy = new DatabaseSync(legacyPath);
+    legacy.exec(`
+      CREATE TABLE jobs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, type TEXT NOT NULL, target TEXT NOT NULL,
+        payload TEXT NOT NULL, media BLOB, media_name TEXT, media_mimetype TEXT,
+        status TEXT NOT NULL DEFAULT 'pending', error TEXT,
+        attempts INTEGER NOT NULL DEFAULT 0, queued_at TEXT NOT NULL,
+        started_at TEXT, finished_at TEXT
+      );
+      INSERT INTO jobs (type, target, payload, queued_at) VALUES ('text', 'old', '{}', '2026-01-01T00:00:00.000Z');
+    `);
+    legacy.close();
+
+    const migrated = createJobStore({ dbPath: legacyPath });
+    try {
+      const job = migrated.get(1);
+      assert.equal(job.lane, "bulk", "jobs queued before the upgrade keep their pacing");
+      assert.equal(job.target, "old");
+      assert.equal(migrated.claimNext().id, 1);
+    } finally {
+      migrated.close();
+    }
+  });
+});

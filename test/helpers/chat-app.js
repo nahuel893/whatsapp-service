@@ -97,6 +97,7 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeou
   }
 
   return {
+    base,
     call,
     drained,
     sent: control.sent,

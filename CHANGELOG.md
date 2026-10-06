@@ -7,6 +7,20 @@ anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 
 ## Sin publicar
 
+### Agregado
+
+- **Scope `agent`:** ve y responde todas las conversaciones sin grants, pero no
+  administra ni usa los endpoints de envío masivo. El rol genérico para un
+  consumidor conversacional.
+- **Servidor MCP** (`packages/mcp`): adaptador para agentes por stdio, sin
+  dependencias nuevas.
+- **Agente de referencia** (`examples/claude-agent`): webhook → `claude -p` →
+  respuesta, como ejemplo de consumidor completo.
+
+### Seguridad
+
+- Los webhooks ya no siguen redirecciones: un 3xx es una entrega fallida.
+
 ### Documentación
 
 - Detalles del contrato del webhook en `AGENTS.md` (§ Detalles del contrato

@@ -254,11 +254,13 @@ funcionen sin credenciales.
 
 ### Credenciales por consumidor (F3)
 
-Cada agente puede tener su propia key. La `API_KEY` compartida sigue siendo una
-credencial con **scope `all`** (todo, como siempre); una key creada con
-`POST /principals` tiene por default **scope `conversations`**: sólo ve las
-conversaciones que se le conceden, y recibe **403** en `/send-*`, `/groups`,
-`/status`, `/queue/*` y en toda la administración.
+Cada consumidor puede tener su propia key, con uno de tres scopes:
+
+| Scope | Conversaciones | Responder | Administración y `/send-*`, `/groups`, `/status`, `/queue/*` |
+|---|---|---|---|
+| `all` | todas | sí | sí — es la `API_KEY` compartida, o una key de operador |
+| `agent` | **todas**, sin grants | sí | **no** (403) — el rol de un consumidor conversacional que atiende a quien escriba |
+| `conversations` (default) | sólo las concedidas | sí | no (403) |
 
 | Método | Endpoint | Body | Response | Scope |
 |---|---|---|---|---|
@@ -320,6 +322,32 @@ POST /conversations/:id/read {seq: next}  → marcar hasta dónde procesé
 
 `test/agent-loop.test.js` corre este ciclo de punta a punta sobre
 `MemoryTransport`.
+
+### Adaptador MCP para agentes (`packages/mcp`)
+
+Servidor MCP por stdio, sin dependencias, que expone la API como
+herramientas: `list_inbox`, `read_new_messages` (con `mark_read`), `reply`,
+`mark_read` y `get_transcript`. Salidas compactas y errores accionables
+("esperá 30 s"). Es un consumidor más de la API pública.
+
+```json
+{ "mcpServers": { "whatsapp": {
+    "command": "node",
+    "args": ["/ruta/a/whatsapp-service/packages/mcp/index.js"],
+    "env": { "WA_SERVICE_URL": "http://127.0.0.1:3001", "WA_SERVICE_API_KEY": "wsk_…" } } } }
+```
+
+### Agente de referencia (`examples/claude-agent`)
+
+Un consumidor completo listo para correr: recibe el webhook (firma
+verificada), junta ráfagas de mensajes, arma la transcripción, le pide la
+respuesta a `claude -p` **sin herramientas** y contesta. Registra su
+suscripción al arrancar y la borra al salir.
+
+```bash
+WA_SERVICE_URL=http://127.0.0.1:3001 WA_SERVICE_API_KEY=wsk_… \
+  AGENT_SYSTEM_PROMPT="Sos el asistente de …" node examples/claude-agent/index.js
+```
 
 ### Webhook: que el servicio le avise al agente (F4b)
 

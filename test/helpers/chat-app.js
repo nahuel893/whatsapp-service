@@ -17,33 +17,49 @@ const { createPrincipalStore } = require("../../lib/principal-store");
 
 const ADMIN = "admin-key";
 
+/**
+ * Baileys manager stand-in. `sent` records every provider-level send;
+ * setting `failSends` makes them reject.
+ */
 function fakeManager() {
+  let counter = 0;
+  const control = { sent: [], failSends: false };
   const sock = {
-    async sendMessage() {
-      return { key: { id: "WA-1" } };
+    async sendMessage(jid, content) {
+      if (control.failSends) throw new Error("socket closed");
+      control.sent.push({ jid, content });
+      return { key: { id: `WA-${++counter}` } };
     },
     async groupFetchAllParticipating() {
       return {};
     },
   };
-  return {
+  const manager = {
     getStatus: () => ({ connected: true, phone: "5490000000000", connectedAt: 1 }),
     getSock: () => sock,
     onEvent: () => () => {},
     async connect() {},
   };
+  return { manager, control };
 }
 
-async function startChatApp({ apiKey = ADMIN } = {}) {
+async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute } = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-admin-"));
   const chatDb = path.join(tmpDir, "chat.db");
   const conversations = createConversationStore({ dbPath: chatDb });
   const principals = createPrincipalStore({ dbPath: chatDb });
   const store = createJobStore({ dbPath: path.join(tmpDir, "queue.db") });
-  const queue = createMessageQueue({ store, minDelayMs: 0, maxDelayMs: 0 });
+  const queue = createMessageQueue({
+    store,
+    minDelayMs: 0,
+    maxDelayMs: 0,
+    conversationMinDelayMs: 0,
+    conversationMaxDelayMs: 0,
+  });
+  const { manager, control } = fakeManager();
 
   const app = express();
-  app.use(createRouter(fakeManager(), queue, { apiKey, principals, conversations }));
+  app.use(createRouter(manager, queue, { apiKey, principals, conversations, maxRepliesPerMinute }));
   queue.start();
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
@@ -68,8 +84,21 @@ async function startChatApp({ apiKey = ADMIN } = {}) {
     return { status: res.status, body: parsed };
   }
 
+  /** Resolves when the queue is idle. */
+  async function drained() {
+    for (let i = 0; i < 1000; i++) {
+      const s = queue.getStatus();
+      if (s.pending === 0 && !s.processing) return;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    throw new Error("queue did not drain");
+  }
+
   return {
     call,
+    drained,
+    sent: control.sent,
+    control,
     principals,
     conversations,
     async close() {

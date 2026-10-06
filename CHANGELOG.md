@@ -5,6 +5,21 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
+## Sin publicar
+
+### Agregado
+
+- **Los agentes pueden enviar imágenes y archivos:** `POST
+  /conversations/:id/messages` acepta multipart con `file` y `caption`. JPEG,
+  PNG y WebP salen como imagen; el resto, como documento. `CHAT_MAX_MEDIA_MB`
+  (16) con 413 si se supera.
+- **MCP `send_file`**, restringida a `WA_MCP_FILES_DIR`.
+
+### Cambiado
+
+- Cada mensaje (lectura y webhook) gana el campo `media`: `null`, o
+  `{type, name, mimetype, size}`. `chat.db` se migra en el lugar.
+
 ## [0.3.0] — 2026-10-06
 
 Listo para conectar consumidores conversacionales. **Validado contra WhatsApp real**

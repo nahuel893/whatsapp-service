@@ -69,6 +69,7 @@ describe("protocol", () => {
       "mark_read",
       "read_new_messages",
       "reply",
+      "send_file",
     ]);
     for (const tool of tools) {
       assert.equal(typeof tool.description, "string");
@@ -193,4 +194,63 @@ test("refuses to start without an API key", async () => {
   const code = await new Promise((resolve) => child.on("close", resolve));
   assert.notEqual(code, 0);
   assert.match(stderr, /WA_SERVICE_API_KEY/);
+});
+
+describe("send_file", () => {
+  const fs = require("node:fs");
+  const os = require("node:os");
+
+  async function setupFiles(t, { allowed = true } = {}) {
+    const ctx = await setup(t);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-mcp-files-"));
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), "wa-mcp-outside-"));
+    t.after(() => {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(outside, { recursive: true, force: true });
+    });
+    fs.writeFileSync(path.join(dir, "catalogo.pdf"), "%PDF-catalogo");
+    fs.writeFileSync(path.join(dir, "foto.png"), "png");
+    fs.writeFileSync(path.join(outside, "secreto.txt"), "no");
+    fs.symlinkSync(path.join(outside, "secreto.txt"), path.join(dir, "atajo.txt"));
+    const server = createMcpServer({ baseUrl: ctx.app.base, apiKey: ctx.key, filesDir: allowed ? dir : undefined });
+    const call = async (name, args) =>
+      (await server.handle({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name, arguments: args } })).result;
+    return { ...ctx, call, dir, outside };
+  }
+
+  test("sends a file from the allowed directory, as image or document by type", async (t) => {
+    const { app, call, conv } = await setupFiles(t);
+    const doc = await call("send_file", { conversation_id: conv.id, path: "catalogo.pdf", caption: "el catálogo" });
+    assert.equal(doc.isError, undefined, text(doc));
+    const img = await call("send_file", { conversation_id: conv.id, path: "foto.png" });
+    assert.equal(img.isError, undefined, text(img));
+    await app.drained();
+
+    assert.equal(app.sent[0].content.fileName, "catalogo.pdf");
+    assert.equal(app.sent[0].content.caption, "el catálogo");
+    assert.equal(Buffer.from(app.sent[1].content.image).toString(), "png");
+  });
+
+  test("refuses paths outside the allowed directory, including through symlinks", async (t) => {
+    const { call, conv, outside } = await setupFiles(t);
+    for (const p of ["../x", path.join(outside, "secreto.txt"), "atajo.txt", "/etc/hostname"]) {
+      const res = await call("send_file", { conversation_id: conv.id, path: p });
+      assert.equal(res.isError, true, p);
+      assert.match(text(res), /fuera del directorio permitido|no existe/, p);
+    }
+  });
+
+  test("is unavailable when no directory is configured", async (t) => {
+    const { call, conv } = await setupFiles(t, { allowed: false });
+    const res = await call("send_file", { conversation_id: conv.id, path: "catalogo.pdf" });
+    assert.equal(res.isError, true);
+    assert.match(text(res), /WA_MCP_FILES_DIR/);
+  });
+
+  test("messages with a file show it in compact form", async (t) => {
+    const { call, conv } = await setupFiles(t);
+    await call("send_file", { conversation_id: conv.id, path: "catalogo.pdf" });
+    const transcript = JSON.parse(text(await call("get_transcript", { conversation_id: conv.id, last: 1 })));
+    assert.deepEqual(transcript.messages[0].file, { type: "document", name: "catalogo.pdf" });
+  });
 });

@@ -16,6 +16,9 @@
  */
 "use strict";
 
+const fs = require("node:fs");
+const path = require("node:path");
+
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 // The MCP server ships with the service, so it reports the service's version.
 const SERVER_INFO = { name: "whatsapp-service", version: require("../../package.json").version };
@@ -63,6 +66,22 @@ const TOOLS = [
     },
   },
   {
+    name: "send_file",
+    description:
+      "Send a file to the customer of a conversation: images (jpg, png, webp) " +
+      "show inline, anything else arrives as a document. `path` is relative to " +
+      "the directory this server is allowed to read from.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        conversation_id: { type: "string" },
+        path: { type: "string", description: "File path inside the allowed directory." },
+        caption: { type: "string", maxLength: 4096 },
+      },
+      required: ["conversation_id", "path"],
+    },
+  },
+  {
     name: "mark_read",
     description: "Mark the conversation as read up to a message seq.",
     inputSchema: {
@@ -99,9 +118,25 @@ function contactOf(address) {
   return i === -1 ? address : address.slice(i + 1);
 }
 
+const MIME_BY_EXTENSION = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+  ".pdf": "application/pdf",
+  ".csv": "text/csv",
+  ".txt": "text/plain",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  ".zip": "application/zip",
+};
+
 /** Message in the compact shape agents get. Status only when it is news. */
 function compact(m) {
   const out = { seq: m.seq, from: m.direction === "in" ? "customer" : "you", text: m.text, at: m.at };
+  if (m.media) out.file = { type: m.media.type, name: m.media.name };
   const routine = m.direction === "in" ? "received" : "sent";
   if (m.status !== routine) out.status = m.status;
   return out;
@@ -122,21 +157,47 @@ function requireString(args, name) {
  * @param {object} options
  * @param {string} options.baseUrl — whatsapp-service base URL
  * @param {string} options.apiKey — a principal key (scope `agent`)
+ * @param {string} [options.filesDir] — the only directory send_file may read
+ *   from. Unset, send_file is disabled: an agent must never be able to send a
+ *   customer an arbitrary file from this machine.
  * @param {function} [options.fetch]
  */
-function createMcpServer({ baseUrl, apiKey, fetch = globalThis.fetch }) {
+function createMcpServer({ baseUrl, apiKey, filesDir, fetch = globalThis.fetch }) {
   const base = baseUrl.replace(/\/+$/, "");
 
+  /**
+   * Resolves `requested` inside filesDir, following symlinks, and refuses
+   * anything that ends up outside it.
+   */
+  function resolveAllowedFile(requested) {
+    if (!filesDir) {
+      throw new ToolError("send_file no está habilitado: el servidor necesita WA_MCP_FILES_DIR.");
+    }
+    const root = fs.realpathSync(filesDir);
+    let real;
+    try {
+      real = fs.realpathSync(path.resolve(root, requested));
+    } catch {
+      throw new ToolError(`El archivo no existe: ${requested}`);
+    }
+    if (real !== root && !real.startsWith(root + path.sep)) {
+      throw new ToolError(`El archivo está fuera del directorio permitido: ${requested}`);
+    }
+    if (!fs.statSync(real).isFile()) throw new ToolError(`No es un archivo: ${requested}`);
+    return real;
+  }
+
   async function api(method, pathname, body) {
+    const isForm = body instanceof FormData;
     let res;
     try {
       res = await fetch(`${base}${pathname}`, {
         method,
         headers: {
           "x-api-key": apiKey,
-          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...(body === undefined || isForm ? {} : { "content-type": "application/json" }),
         },
-        body: body === undefined ? undefined : JSON.stringify(body),
+        body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
       });
     } catch (err) {
       throw new ToolError(`No se pudo contactar al servicio de WhatsApp (${err.message}).`);
@@ -148,6 +209,7 @@ function createMcpServer({ baseUrl, apiKey, fetch = globalThis.fetch }) {
     if (res.status === 401 || res.status === 403) {
       throw new ToolError("La API key no tiene permiso para esta operación.");
     }
+    if (res.status === 413) throw new ToolError("El archivo es demasiado grande para enviarlo.");
     if (res.status === 429) {
       const seconds = data?.retryAfterSeconds ?? 60;
       throw new ToolError(
@@ -185,6 +247,17 @@ function createMcpServer({ baseUrl, apiKey, fetch = globalThis.fetch }) {
       const text = requireString(args, "text");
       const { message } = await api("POST", `/conversations/${encodeURIComponent(id)}/messages`, { text });
       return { queued: true, seq: message.seq };
+    },
+
+    async send_file(args) {
+      const id = requireString(args, "conversation_id");
+      const file = resolveAllowedFile(requireString(args, "path"));
+      const mimetype = MIME_BY_EXTENSION[path.extname(file).toLowerCase()] || "application/octet-stream";
+      const form = new FormData();
+      form.append("file", new Blob([fs.readFileSync(file)], { type: mimetype }), path.basename(file));
+      if (typeof args.caption === "string" && args.caption !== "") form.append("caption", args.caption);
+      const { message } = await api("POST", `/conversations/${encodeURIComponent(id)}/messages`, form);
+      return { queued: true, seq: message.seq, file: { type: message.media.type, name: message.media.name } };
     },
 
     async mark_read(args) {

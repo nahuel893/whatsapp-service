@@ -4,6 +4,8 @@
  *
  *   WA_SERVICE_URL=http://127.0.0.1:3001 WA_SERVICE_API_KEY=wsk_… node packages/mcp/index.js
  *
+ * WA_MCP_FILES_DIR (optional) enables send_file, restricted to that directory.
+ *
  * One JSON-RPC message per line on stdin; responses one per line on stdout.
  * stdout carries only protocol messages — diagnostics go to stderr.
  */
@@ -20,7 +22,7 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const server = createMcpServer({ baseUrl, apiKey });
+const server = createMcpServer({ baseUrl, apiKey, filesDir: process.env.WA_MCP_FILES_DIR || undefined });
 const send = (response) => process.stdout.write(`${JSON.stringify(response)}\n`);
 
 const lines = readline.createInterface({ input: process.stdin });

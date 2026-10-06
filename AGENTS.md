@@ -163,6 +163,7 @@ Node lo carga solo (`process.loadEnvFile()`, sin dependencia).
 | `CHAT_RETENTION_DAYS` | `90` | Días de historial de conversación. Lo purgado se reporta como `gap` |
 | `CONVERSATION_MIN_DELAY_MS` / `MAX` | `1500` / `4000` | Piso humano entre una respuesta y el envío anterior |
 | `CONVERSATION_MAX_PER_MINUTE` | `20` | Respuestas por conversación por minuto; más allá, 429 |
+| `CHAT_MAX_MEDIA_MB` | `16` | Tamaño máximo de un archivo en una respuesta; más grande, 413 |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras `connection: open` antes del primer envío |
@@ -299,6 +300,17 @@ mensaje (mismo `seq`) pasa a `received` con su texto.
 | Método | Endpoint | Body | Response |
 |---|---|---|---|
 | POST | `/conversations/:id/messages` | JSON `{text}` (1–4096) | **202** `{ok, message{…, direction:"out", status:"queued"}, job_id}` · 429 `{ok, error:"rate_limited", retryAfterSeconds}` |
+| POST | `/conversations/:id/messages` | multipart `file` + `caption` opcional | igual; 413 `file_too_large` si supera `CHAT_MAX_MEDIA_MB` |
+
+**Archivos e imágenes:** JPEG, PNG y WebP salen como **imagen** (se ven en el
+chat); cualquier otro tipo, como **documento** con su nombre. Van por el mismo
+carril y cuentan para el mismo tope. Los bytes viajan en la cola y se borran al
+enviarse; la transcripción guarda sólo `media: {type, name, mimetype, size}`.
+
+```bash
+curl -X POST localhost:3001/conversations/$CONV/messages -H "x-api-key: $KEY" \
+  -F "file=@presupuesto.pdf" -F "caption=Te paso el presupuesto"
+```
 
 La respuesta entra a la transcripción como `queued` y pasa a `sent` o `error`.
 Va por el **carril `conversation`** de la cola:
@@ -328,7 +340,9 @@ POST /conversations/:id/read {seq: next}  → marcar hasta dónde procesé
 
 Servidor MCP por stdio, sin dependencias, que expone la API como
 herramientas: `list_inbox`, `read_new_messages` (con `mark_read`), `reply`,
-`mark_read` y `get_transcript`. Salidas compactas y errores accionables
+`send_file`, `mark_read` y `get_transcript`. `send_file` sólo puede leer
+archivos dentro de `WA_MCP_FILES_DIR` (resuelve symlinks y rechaza lo que caiga
+afuera); sin esa variable, la herramienta está deshabilitada. Salidas compactas y errores accionables
 ("esperá 30 s"). Es un consumidor más de la API pública.
 
 ```json
@@ -392,7 +406,7 @@ marcador. Webhook para la latencia, cursor para la garantía.
 - **Tolerancia del timestamp:** el servicio **no la impone**; la decide el
   receptor. Recomendado: rechazar a más de 300 s del reloj local.
 - **Payload:** `{event, deliveryId, conversation{id, channel, address},
-  message{id, seq, direction, author, text, status, at}}`. `deliveryId` es igual
+  message{id, seq, direction, author, text, status, at, media}}`. `deliveryId` es igual
   a `x-webhook-id`. `message.direction` es siempre `"in"`.
 - **Eventos:** `message.created` (nuevo) y `message.updated` (un
   `undecryptable` que se completó: **mismo `message.id` y `seq`**, ahora con

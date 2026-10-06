@@ -244,9 +244,32 @@ Rama `feat/f5-reply-lanes`, apilada sobre F4. TDD estricto.
 - [x] **F5.5 — Espera de reconexión** `2233256`.
 - [x] **F5.6 — Ciclo completo de un agente** (`test/agent-loop.test.js`).
 
+## F4b — Webhook
+
+Rama `feat/f4b-webhooks`, apilada sobre F5. TDD estricto.
+
+**Decisiones:**
+- Suscripciones por principal (`subscriptions` en `chat.db`). El secreto se
+  guarda en claro porque hace falta para firmar; se muestra una sola vez.
+- Firma `X-Webhook-Signature: sha256=HMAC(secret, "<timestamp>.<body>")` con
+  `X-Webhook-Timestamp`: verificable y resistente a replay.
+- Eventos `message.created` y `message.updated` (un `undecryptable` que se
+  completó). Un duplicado del proveedor no dispara nada.
+- Visibilidad igual que la lectura: grant o scope `all`.
+- Reintentos en memoria 1 s / 5 s / 25 s, timeout 5 s por intento; después se
+  abandona — el cursor es la recuperación (D4). Sin cola de entrega.
+- Sólo `http`/`https`. **SSRF aceptado y documentado**: el caso principal es un
+  agente en `localhost`, así que no se bloquean hosts internos; las keys las da
+  el operador.
+
+- [ ] **F4b.1 — `lib/subscription-store.js`**
+- [ ] **F4b.2 — `lib/webhooks.js`** (dispatcher con firma y reintentos)
+- [ ] **F4b.3 — Endpoints** `POST/GET/DELETE /subscriptions`
+- [ ] **F4b.4 — Captura → dispatcher** + `index.js` + docs
+
 ## Próximo paso
 
-F4b — webhook (entrega empujada, con el cursor como recuperación).
+F4b en curso.
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

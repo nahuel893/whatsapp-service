@@ -195,6 +195,8 @@ Rama `feat/f3-principals`, apilada sobre F2. TDD estricto, runner `npm test`.
 Rama `feat/f4-cursor-read`, apilada sobre F3. TDD estricto.
 
 **Decisiones:**
+- **Retención = prefijo contiguo de mensajes viejos.** Con timestamps fuera de
+  orden, purgar "hasta el seq viejo más alto" borraría un mensaje reciente.
 - **Cursor guardado en el servidor** (`read_markers`, por principal y
   conversación). Un agente efímero no necesita persistir su `seq`: lee sin
   `since`, procesa, y hace `POST /read`. `since` explícito sigue disponible.
@@ -208,16 +210,16 @@ Rama `feat/f4-cursor-read`, apilada sobre F3. TDD estricto.
 - Forma pública de un mensaje: `{id, seq, direction, author, text, status, at}`.
   El `externalId` del proveedor no sale.
 
-- [ ] **F4.1 — Store:** `listConversations`, `readMessages` (con gap),
+- [x] **F4.1 — Store:** `9bd08be`. `listConversations`, `readMessages` (con gap),
       `prune`, `lastInboundSeq`/`countInboundAfter`; `read_markers` en el
       principal store.
-- [ ] **F4.2 — API:** `GET /conversations`, `GET /conversations/:id`,
+- [x] **F4.2 — API:** `ac8c9ce`. `GET /conversations`, `GET /conversations/:id`,
       `GET /conversations/:id/messages`, `POST /conversations/:id/read`.
-- [ ] **F4.3 — Retención al arranque** + config + docs.
+- [x] **F4.3 — Retención al arranque** + config + docs. Además una vez por día (`setInterval` con `unref`).
 
 ## Próximo paso
 
-F4 en curso.
+F5 — responder, con el carril conversacional.
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

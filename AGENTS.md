@@ -158,7 +158,8 @@ Node lo carga solo (`process.loadEnvFile()`, sin dependencia).
 | `QUEUE_DB_PATH` | `$DATA_DIR/queue.db` | Archivo SQLite de la cola |
 | `QUEUE_RETENTION_DAYS` | `30` | Días de jobs terminados que se conservan |
 | `INBOUND_CAPTURE` | `false` | `true` persiste los mensajes entrantes en `chat.db`. **Escribe a disco todos los chats del número** |
-| `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones y mensajes |
+| `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones, mensajes, principals y grants |
+| `CHAT_RETENTION_DAYS` | `90` | Días de historial de conversación. Lo purgado se reporta como `gap` |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras `connection: open` antes del primer envío |
@@ -265,6 +266,28 @@ conversaciones que se le conceden, y recibe **403** en `/send-*`, `/groups`,
 | POST | `/conversations` | JSON `{address}` (`whatsapp:+549…`, `whatsapp:group:<id>`) | 201/200 `{ok, conversation}` | all |
 | POST | `/conversations/:id/grants` | JSON `{principal_id}` | 201/200 `{ok}` · 404 | all |
 | DELETE | `/conversations/:id/grants/:principalId` | — | `{ok}` · 404 | all |
+
+### Lectura de conversaciones (F4)
+
+Una key de agente ve sólo sus conversaciones concedidas; cualquier otra
+responde **404**, igual que una inexistente. La key `all` ve todas.
+
+| Método | Endpoint | Response |
+|---|---|---|
+| GET | `/conversations` | `{ok, conversations[{id, channel, address, createdAt, lastMessageAt, lastSeq, readSeq, unread}]}` — más reciente primero |
+| GET | `/conversations/:id` | `{ok, conversation}` |
+| GET | `/conversations/:id/messages?since=&limit=` | `{ok, messages[{id, seq, direction, author, text, status, at}], next, gap}` |
+| POST | `/conversations/:id/read` | JSON `{seq}` → `{ok, readSeq}` |
+
+**El cursor lo guarda el servidor.** Sin `since`, la lectura arranca en el
+marcador del principal: el agente lee, procesa, y marca con `POST .../read`
+el `next` que recibió. Si se reinicia en el medio, retoma donde quedó. El
+marcador sólo avanza. `since` explícito sirve para releer.
+
+`gap: {from, to, reason: "retention"}` aparece cuando lo pedido ya se purgó: el
+consumidor sabe exactamente qué contexto perdió. `status: "undecryptable"` es un
+mensaje que WhatsApp no pudo descifrar todavía; si el reintento llega, el mismo
+mensaje (mismo `seq`) pasa a `received` con su texto.
 
 ⚠️ **Los scopes sólo se hacen cumplir con `API_KEY` seteada.** Con `API_KEY`
 vacía un request sin key es `all`, así que una key de agente no protege nada.

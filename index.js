@@ -82,6 +82,21 @@ const server = app.listen(config.PORT, config.HOST, () => {
     );
   }
 
+  // Conversation retention: at startup and once a day after. The purged
+  // range stays visible to readers as a gap (design D5).
+  const pruneChat = () => {
+    try {
+      const { messages } = chatStore.prune(config.CHAT_RETENTION_DAYS);
+      if (messages > 0) {
+        logger.info({ messages, days: config.CHAT_RETENTION_DAYS }, "Mensajes antiguos purgados");
+      }
+    } catch (err) {
+      logger.error({ err }, "Error purgando mensajes antiguos");
+    }
+  };
+  pruneChat();
+  setInterval(pruneChat, 86_400_000).unref();
+
   const pruned = jobStore.prune(config.QUEUE_RETENTION_DAYS);
   if (pruned > 0) {
     logger.info({ jobs: pruned, days: config.QUEUE_RETENTION_DAYS }, "Jobs antiguos purgados");

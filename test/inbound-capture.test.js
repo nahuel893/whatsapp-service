@@ -98,7 +98,7 @@ function loadConfig(env) {
   const configPath = JSON.stringify(path.join(__dirname, "..", "lib", "config.js"));
   const out = execFileSync(
     process.execPath,
-    ["-e", `const c=require(${configPath});console.log(JSON.stringify({i:c.INBOUND_CAPTURE,p:c.CHAT_DB_PATH}))`],
+    ["-e", `const c=require(${configPath});console.log(JSON.stringify({i:c.INBOUND_CAPTURE,p:c.CHAT_DB_PATH,r:c.CHAT_RETENTION_DAYS}))`],
     { cwd: tmpDir, env: { PATH: process.env.PATH, ...env } }
   );
   return JSON.parse(out);
@@ -106,7 +106,8 @@ function loadConfig(env) {
 
 test("config: capture is off unless INBOUND_CAPTURE=true, and chat.db lives in DATA_DIR", () => {
   const dataDir = path.join(tmpDir, "data");
-  assert.deepEqual(loadConfig({ DATA_DIR: dataDir }), { i: false, p: path.join(dataDir, "chat.db") });
+  assert.deepEqual(loadConfig({ DATA_DIR: dataDir }), { i: false, p: path.join(dataDir, "chat.db"), r: 90 });
+  assert.equal(loadConfig({ CHAT_RETENTION_DAYS: "7" }).r, 7);
   assert.equal(loadConfig({ DATA_DIR: dataDir, INBOUND_CAPTURE: "1" }).i, false);
   assert.equal(loadConfig({ DATA_DIR: dataDir, INBOUND_CAPTURE: "true" }).i, true);
   assert.equal(loadConfig({ CHAT_DB_PATH: path.join(tmpDir, "x.db") }).p, path.join(tmpDir, "x.db"));

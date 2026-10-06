@@ -179,3 +179,82 @@ describe("createMessageQueue", () => {
     assert.ok(ranAt - enqueuedAt >= 35, `sent after ${ranAt - enqueuedAt}ms, expected >= 35ms`);
   });
 });
+
+describe("lanes", () => {
+  function recordSends(q) {
+    const sends = [];
+    q.registerHandler("text", async (job) => sends.push({ lane: "bulk", target: job.target, at: Date.now() }));
+    q.registerHandler("chat", async (job) => sends.push({ lane: "conversation", target: job.target, at: Date.now() }));
+    return sends;
+  }
+
+  test("a reply jumps ahead of a bulk job that is still waiting its delay", async () => {
+    queue = newQueue({ minDelayMs: 400, maxDelayMs: 400, conversationMinDelayMs: 0, conversationMaxDelayMs: 0 });
+    const sends = recordSends(queue);
+    const start = Date.now();
+
+    queue.enqueue({ type: "text", target: "informe", payload: {} });
+    await new Promise((r) => setTimeout(r, 50));
+    queue.enqueue({ type: "chat", target: "cliente", payload: {}, lane: "conversation" });
+    await drained(queue);
+
+    assert.deepEqual(sends.map((s) => s.target), ["cliente", "informe"]);
+    assert.ok(sends[0].at - start < 200, `reply waited ${sends[0].at - start}ms behind the bulk delay`);
+  });
+
+  test("after a reply, the bulk job waits its full delay again", async () => {
+    queue = newQueue({ minDelayMs: 300, maxDelayMs: 300, conversationMinDelayMs: 0, conversationMaxDelayMs: 0 });
+    const sends = recordSends(queue);
+
+    queue.enqueue({ type: "text", target: "informe", payload: {} });
+    await new Promise((r) => setTimeout(r, 50));
+    queue.enqueue({ type: "chat", target: "cliente", payload: {}, lane: "conversation" });
+    await drained(queue);
+
+    const gap = sends[1].at - sends[0].at;
+    assert.ok(gap >= 280, `bulk went out only ${gap}ms after the reply`);
+  });
+
+  test("consecutive replies keep the conversation floor between them", async () => {
+    queue = newQueue({ conversationMinDelayMs: 120, conversationMaxDelayMs: 120 });
+    const sends = recordSends(queue);
+
+    queue.enqueue({ type: "chat", target: "a", payload: {}, lane: "conversation" });
+    queue.enqueue({ type: "chat", target: "b", payload: {}, lane: "conversation" });
+    await drained(queue);
+
+    const gap = sends[1].at - sends[0].at;
+    assert.ok(gap >= 110, `replies only ${gap}ms apart`);
+  });
+
+  test("a reply after a quiet period goes out without an extra wait", async () => {
+    queue = newQueue({ conversationMinDelayMs: 300, conversationMaxDelayMs: 300 });
+    const sends = recordSends(queue);
+    const start = Date.now();
+
+    queue.enqueue({ type: "chat", target: "a", payload: {}, lane: "conversation" });
+    await drained(queue);
+    assert.ok(sends[0].at - start < 100, `first reply waited ${sends[0].at - start}ms`);
+  });
+
+  test("a job waiting its delay is still pending, so a crash then does not mark it processing", async () => {
+    queue = newQueue({ minDelayMs: 300, maxDelayMs: 300 });
+    recordSends(queue);
+    const { id } = queue.enqueue({ type: "text", target: "t", payload: {} });
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(queue.getJob(id).status, "pending");
+    await drained(queue);
+    assert.equal(queue.getJob(id).status, "sent");
+  });
+
+  test("getStatus keeps its frozen shape with lanes in play", () => {
+    queue = newQueue();
+    assert.deepEqual(Object.keys(queue.getStatus()).sort(), [
+      "maxDelayMs",
+      "minDelayMs",
+      "pending",
+      "processing",
+      "recent",
+    ]);
+  });
+});

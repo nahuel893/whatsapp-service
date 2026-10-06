@@ -17,7 +17,8 @@
 "use strict";
 
 const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
-const SERVER_INFO = { name: "whatsapp-service", version: "0.3.0" };
+// The MCP server ships with the service, so it reports the service's version.
+const SERVER_INFO = { name: "whatsapp-service", version: require("../../package.json").version };
 
 const TOOLS = [
   {

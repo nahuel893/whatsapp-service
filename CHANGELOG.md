@@ -5,7 +5,10 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
-## Sin publicar
+## [0.3.0] — 2026-10-06
+
+Listo para conectar consumidores conversacionales. **Validado contra WhatsApp real**
+(recibir, notificar por webhook y responder) en una instancia de prueba.
 
 ### Agregado
 
@@ -16,7 +19,6 @@ anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
   dependencias nuevas.
 - **Agente de referencia** (`examples/claude-agent`): webhook → `claude -p` →
   respuesta, como ejemplo de consumidor completo.
-
 - **`INBOUND_GROUPS`** (default `false`): los mensajes de grupos se descartan
   antes de guardarse, así ningún consumidor los recibe ni los contesta.
 - `InboundMessage.kind`: `"direct"` o `"group"`.
@@ -26,6 +28,12 @@ anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 - Los webhooks ya no siguen redirecciones: un 3xx es una entrega fallida.
 - **Los grupos quedan fuera por default.** En la primera prueba real, un
   agente le respondió a un grupo de trabajo del que el número formaba parte.
+
+### Limitaciones conocidas
+
+- No hay lista de chats habilitados: cualquiera que escriba al número llega al
+  consumidor, que es quien decide a quién atiende.
+- No hay media entrante: de un adjunto llega sólo su texto.
 
 ### Documentación
 
@@ -91,5 +99,6 @@ de Baileys y con arranques reales sin sesión.
 Primera versión publicable: API HTTP de envío sobre Baileys v7, cola
 persistente en SQLite, autenticación por API key, `/health` y Dockerfile.
 
+[0.3.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nahuel893/whatsapp-service/releases/tag/v0.1.0

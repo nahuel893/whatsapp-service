@@ -196,3 +196,26 @@ describe("the scope wall", () => {
     assert.equal((await app.call("GET", "/status")).status, 200);
   });
 });
+
+describe("scope agent", () => {
+  test("can be issued, and is not an administrator", async (t) => {
+    const app = await startApp();
+    t.after(app.close);
+    const res = await app.call("POST", "/principals", { key: ADMIN, body: { name: "bot", scope: "agent" } });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.principal.scope, "agent");
+
+    const key = res.body.key;
+    for (const [method, pathname, body] of [
+      ["POST", "/principals", { name: "x" }],
+      ["GET", "/principals"],
+      ["POST", "/conversations", { address: "whatsapp:+5490000000000" }],
+      ["POST", "/conversations/conv_x/grants", { principal_id: "prn_x" }],
+      ["POST", "/send-text", { to: "5490000000000@s.whatsapp.net", text: "spam" }],
+      ["GET", "/groups"],
+      ["GET", "/queue/status"],
+    ]) {
+      assert.equal((await app.call(method, pathname, { key, body })).status, 403, `${method} ${pathname}`);
+    }
+  });
+});

@@ -99,6 +99,8 @@ test("canSeeWith: legacy and scope all see everything; others need a grant; revo
     const agent = principals.create({ name: "agent" }).principal;
     const canSee = canSeeWith(principals);
 
+    const bot = principals.create({ name: "bot", scope: "agent" }).principal;
+    assert.equal(canSee(bot.id, conv.id), true, "scope agent sees every conversation");
     assert.equal(canSee("legacy", conv.id), true);
     assert.equal(canSee(admin.id, conv.id), true);
     assert.equal(canSee(agent.id, conv.id), false);

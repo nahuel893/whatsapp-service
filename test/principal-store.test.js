@@ -52,6 +52,7 @@ test("the key is stored hashed, never in clear", () => {
 
 test("create accepts scope all and rejects unknown scopes and empty names", () => {
   assert.equal(principals.create({ name: "admin", scope: "all" }).principal.scope, "all");
+  assert.equal(principals.create({ name: "bot", scope: "agent" }).principal.scope, "agent");
   assert.throws(() => principals.create({ name: "x", scope: "root" }));
   assert.throws(() => principals.create({ name: "" }));
   assert.throws(() => principals.create({ name: "   " }));

@@ -196,3 +196,20 @@ describe("POST /conversations/:id/read", () => {
     assert.equal(res.status, 404);
   });
 });
+
+describe("scope agent", () => {
+  test("sees and answers every conversation without grants", async (t) => {
+    const { app, other } = await setup(t);
+    const { key } = app.principals.create({ name: "bot", scope: "agent" });
+
+    const list = await app.call("GET", "/conversations", { key });
+    assert.equal(list.body.conversations.length, 2, "every conversation of the number");
+
+    const read = await app.call("GET", `/conversations/${other.id}/messages?since=0`, { key });
+    assert.equal(read.status, 200);
+    assert.deepEqual(read.body.messages.map((m) => m.text), ["ajeno"]);
+
+    const reply = await app.call("POST", `/conversations/${other.id}/messages`, { key, body: { text: "hola" } });
+    assert.equal(reply.status, 202);
+  });
+});

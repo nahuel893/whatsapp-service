@@ -22,6 +22,8 @@ const { createBaileysTransport } = require("./lib/transport/baileys");
 const { createConversationStore } = require("./lib/conversation-store");
 const { createInboundCapture } = require("./lib/inbound-capture");
 const { createPrincipalStore } = require("./lib/principal-store");
+const { createSubscriptionStore } = require("./lib/subscription-store");
+const { createWebhookDispatcher, canSeeWith } = require("./lib/webhooks");
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -48,6 +50,12 @@ const messageQueue = createMessageQueue({
 // opens first because it owns the table grants reference.
 const chatStore = createConversationStore({ dbPath: config.CHAT_DB_PATH });
 const principalStore = createPrincipalStore({ dbPath: config.CHAT_DB_PATH });
+const subscriptionStore = createSubscriptionStore({ dbPath: config.CHAT_DB_PATH });
+const webhooks = createWebhookDispatcher({
+  subscriptions: subscriptionStore,
+  canSee: canSeeWith(principalStore),
+  logger,
+});
 
 // ── Routes ───────────────────────────────────────────────────────────────
 // Registers the queue handlers as a side effect, so this must run before
@@ -58,13 +66,22 @@ app.use(createRouter(baileysMgr, messageQueue, {
   transport,
   principals: principalStore,
   conversations: chatStore,
+  subscriptions: subscriptionStore,
   maxRepliesPerMinute: config.CONVERSATION_MAX_PER_MINUTE,
 }));
 
 // ── Inbound capture (opt-in) ─────────────────────────────────────────────
 // Subscribed before connecting, so no message of the first sync is missed.
 if (config.INBOUND_CAPTURE) {
-  createInboundCapture({ transport, store: chatStore, logger });
+  createInboundCapture({
+    transport,
+    store: chatStore,
+    logger,
+    // Not awaited: webhook retries must never hold up the capture.
+    onStored: (event) => {
+      webhooks.dispatch(event);
+    },
+  });
 }
 
 // ── Listen ───────────────────────────────────────────────────────────────
@@ -128,6 +145,7 @@ function shutdown(signal) {
       logger.error({ err }, "Error cerrando la base de datos de la cola");
     }
     try {
+      subscriptionStore.close();
       principalStore.close();
       chatStore.close();
     } catch (err) {

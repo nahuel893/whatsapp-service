@@ -262,14 +262,22 @@ Rama `feat/f4b-webhooks`, apilada sobre F5. TDD estricto.
   agente en `localhost`, así que no se bloquean hosts internos; las keys las da
   el operador.
 
-- [ ] **F4b.1 — `lib/subscription-store.js`**
-- [ ] **F4b.2 — `lib/webhooks.js`** (dispatcher con firma y reintentos)
-- [ ] **F4b.3 — Endpoints** `POST/GET/DELETE /subscriptions`
-- [ ] **F4b.4 — Captura → dispatcher** + `index.js` + docs
+- [x] **F4b.1 — `lib/subscription-store.js`** `9f0a01e`
+- [x] **F4b.2 — `lib/webhooks.js`** (dispatcher con firma y reintentos) `c21bb0f`
+- [x] **F4b.3 — Endpoints** `POST/GET/DELETE /subscriptions`
+- [x] **F4b.4 — Captura → dispatcher** + `index.js` + docs. E2E con servidor HTTP real y firma verificada.
+
+## Estado: agentes funcionales (2026-10-06)
+
+F0–F5 + F4b hechos. Un agente con su key puede: ver qué conversaciones tienen
+`unread`, leer desde su marcador, responder por el carril conversacional, y
+recibir cada entrante por webhook firmado. 265/265 tests.
 
 ## Próximo paso
 
-F4b en curso.
+- **F6** — que los endpoints viejos traduzcan al modelo nuevo (un solo camino).
+- Probar contra WhatsApp real (parear una sesión de prueba, no la de producción).
+- Pendientes de revisión: warnings de `resolveLegacyTarget` (#2842).
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

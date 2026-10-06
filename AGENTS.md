@@ -321,6 +321,41 @@ POST /conversations/:id/read {seq: next}  → marcar hasta dónde procesé
 `test/agent-loop.test.js` corre este ciclo de punta a punta sobre
 `MemoryTransport`.
 
+### Webhook: que el servicio le avise al agente (F4b)
+
+En vez de preguntar cada tanto, el agente registra una URL y el servicio le
+**empuja** cada mensaje entrante de las conversaciones que puede leer. Requiere
+`INBOUND_CAPTURE=true`.
+
+| Método | Endpoint | Body | Response |
+|---|---|---|---|
+| POST | `/subscriptions` | JSON `{url}` (http/https) | 201 `{ok, subscription, secret}` — **el secreto se muestra una sola vez** |
+| GET | `/subscriptions` | — | `{ok, subscriptions[]}` (las propias, sin secreto) |
+| DELETE | `/subscriptions/:id` | — | `{ok}` · 404 (la key `all` borra cualquiera) |
+
+Cada entrega es un `POST` a la URL con:
+
+```text
+X-Webhook-Id:        dlv_…   (igual en cada reintento: clave para deduplicar)
+X-Webhook-Timestamp: <unix seconds>
+X-Webhook-Signature: sha256=<hex HMAC-SHA256(secret, "<timestamp>.<body>")>
+
+{"event": "message.created" | "message.updated",
+ "deliveryId": "dlv_…",
+ "conversation": {"id", "channel", "address"},
+ "message": {"id", "seq", "direction", "author", "text", "status", "at"}}
+```
+
+El agente **verifica la firma** y descarta timestamps viejos (replay). Responde
+2xx rápido y procesa aparte. Si falla, el servicio reintenta a 1 s, 5 s y 25 s
+(timeout 5 s por intento) y después **abandona**: el mensaje no se pierde,
+queda en el almacén y el agente lo recupera con `GET .../messages` desde su
+marcador. Webhook para la latencia, cursor para la garantía.
+
+⚠️ El servicio hace POST a la URL que registre cualquier key, incluidas
+direcciones internas (el caso principal es un agente en `localhost`). Las keys
+las emite el operador; no le des una a alguien en quien no confiás.
+
 ⚠️ **Los scopes sólo se hacen cumplir con `API_KEY` seteada.** Con `API_KEY`
 vacía un request sin key es `all`, así que una key de agente no protege nada.
 

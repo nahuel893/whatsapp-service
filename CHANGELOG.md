@@ -5,6 +5,15 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
+## Sin publicar
+
+### Documentación
+
+- Detalles del contrato del webhook en `AGENTS.md` (§ Detalles del contrato
+  del webhook): nombres exactos de headers, unidad del timestamp, tolerancia
+  a cargo del receptor, dedup de `message.updated`, ausencia de eco de mensajes
+  propios y de media.
+
 ## [0.2.0] — 2026-10-06
 
 Chat bidireccional: un agente puede leer los mensajes que llegan a una

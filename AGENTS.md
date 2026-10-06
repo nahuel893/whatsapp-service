@@ -352,6 +352,29 @@ El agente **verifica la firma** y descarta timestamps viejos (replay). Responde
 queda en el almacén y el agente lo recupera con `GET .../messages` desde su
 marcador. Webhook para la latencia, cursor para la garantía.
 
+#### Detalles del contrato del webhook
+
+- **Headers exactos** (HTTP no distingue mayúsculas): `x-webhook-id`,
+  `x-webhook-timestamp`, `x-webhook-signature`. El timestamp está en
+  **segundos** Unix, como string.
+- **Firma:** `sha256=` + hex de `HMAC-SHA256(secret, "<timestamp>.<body crudo>")`.
+  Verificar sobre los bytes recibidos, no sobre el JSON re-serializado, y
+  comparar en tiempo constante.
+- **Tolerancia del timestamp:** el servicio **no la impone**; la decide el
+  receptor. Recomendado: rechazar a más de 300 s del reloj local.
+- **Payload:** `{event, deliveryId, conversation{id, channel, address},
+  message{id, seq, direction, author, text, status, at}}`. `deliveryId` es igual
+  a `x-webhook-id`. `message.direction` es siempre `"in"`.
+- **Eventos:** `message.created` (nuevo) y `message.updated` (un
+  `undecryptable` que se completó: **mismo `message.id` y `seq`**, ahora con
+  texto). Deduplicar por `(message.id, status)`, no sólo por `message.id`.
+- **Sin eco:** las respuestas del agente no vuelven por el webhook, y los
+  mensajes `fromMe` de WhatsApp se descartan. Eso incluye lo que una persona
+  escriba **a mano desde el celular** del número: no aparece ni en el webhook
+  ni en la transcripción.
+- **Sin media:** no hay campo `type`; de un adjunto llega sólo el caption como
+  `text` (o `null`).
+
 ⚠️ El servicio hace POST a la URL que registre cualquier key, incluidas
 direcciones internas (el caso principal es un agente en `localhost`). Las keys
 las emite el operador; no le des una a alguien en quien no confiás.

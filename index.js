@@ -39,6 +39,8 @@ const messageQueue = createMessageQueue({
   store: jobStore,
   minDelayMs: config.MESSAGE_QUEUE_MIN_DELAY_MS,
   maxDelayMs: config.MESSAGE_QUEUE_MAX_DELAY_MS,
+  conversationMinDelayMs: config.CONVERSATION_MIN_DELAY_MS,
+  conversationMaxDelayMs: config.CONVERSATION_MAX_DELAY_MS,
 });
 
 // chat.db holds conversations, principals and grants. It is always open: the
@@ -56,6 +58,7 @@ app.use(createRouter(baileysMgr, messageQueue, {
   transport,
   principals: principalStore,
   conversations: chatStore,
+  maxRepliesPerMinute: config.CONVERSATION_MAX_PER_MINUTE,
 }));
 
 // ── Inbound capture (opt-in) ─────────────────────────────────────────────

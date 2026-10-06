@@ -217,9 +217,36 @@ Rama `feat/f4-cursor-read`, apilada sobre F3. TDD estricto.
       `GET /conversations/:id/messages`, `POST /conversations/:id/read`.
 - [x] **F4.3 — Retención al arranque** + config + docs. Además una vez por día (`setInterval` con `unref`).
 
+## F5 — Responder, con el carril conversacional
+
+Rama `feat/f5-reply-lanes`, apilada sobre F4. TDD estricto.
+
+**Decisiones:**
+- Carril en `jobs.lane` (`bulk` default). Migración en el lugar de `queue.db`:
+  los jobs existentes quedan `bulk`. `lane` no sale por `/queue/job/:id`
+  (forma congelada).
+- La cola **mira antes de esperar y toma después**: un job esperando su delay
+  sigue `pending`. Una respuesta interrumpe la espera de un bulk; el bulk
+  reinicia su delay completo (el golden T8 sigue protegiendo el pacing).
+- Carril conversacional **no instantáneo**: piso 1,5–4 s desde el envío
+  anterior (riesgo abierto 3 del diseño: no está verificado que responder en
+  0 s sea seguro).
+- Tope 20 respuestas/min **por conversación** → 429 + `Retry-After`.
+- El job de respuesta (`chat-text`) sólo apunta al mensaje; el texto vive en
+  la transcripción.
+- Con el transporte caído, la respuesta se acepta y espera la reconexión
+  (5 min, `connectTimeoutMs`).
+
+- [x] **F5.1 — Carriles en `job-store`** `fee529e`.
+- [x] **F5.2 — Planificador por carril** `3162f9f`.
+- [x] **F5.3 — Salientes en la transcripción** (store).
+- [x] **F5.4 — `POST /conversations/:id/messages`** + tope + config.
+- [x] **F5.5 — Espera de reconexión** `2233256`.
+- [x] **F5.6 — Ciclo completo de un agente** (`test/agent-loop.test.js`).
+
 ## Próximo paso
 
-F5 — responder, con el carril conversacional.
+F4b — webhook (entrega empujada, con el cursor como recuperación).
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

@@ -160,6 +160,8 @@ Node lo carga solo (`process.loadEnvFile()`, sin dependencia).
 | `INBOUND_CAPTURE` | `false` | `true` persiste los mensajes entrantes en `chat.db`. **Escribe a disco todos los chats del número** |
 | `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones, mensajes, principals y grants |
 | `CHAT_RETENTION_DAYS` | `90` | Días de historial de conversación. Lo purgado se reporta como `gap` |
+| `CONVERSATION_MIN_DELAY_MS` / `MAX` | `1500` / `4000` | Piso humano entre una respuesta y el envío anterior |
+| `CONVERSATION_MAX_PER_MINUTE` | `20` | Respuestas por conversación por minuto; más allá, 429 |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras `connection: open` antes del primer envío |
@@ -288,6 +290,36 @@ marcador sólo avanza. `since` explícito sirve para releer.
 consumidor sabe exactamente qué contexto perdió. `status: "undecryptable"` es un
 mensaje que WhatsApp no pudo descifrar todavía; si el reintento llega, el mismo
 mensaje (mismo `seq`) pasa a `received` con su texto.
+
+### Responder (F5)
+
+| Método | Endpoint | Body | Response |
+|---|---|---|---|
+| POST | `/conversations/:id/messages` | JSON `{text}` (1–4096) | **202** `{ok, message{…, direction:"out", status:"queued"}, job_id}` · 429 `{ok, error:"rate_limited", retryAfterSeconds}` |
+
+La respuesta entra a la transcripción como `queued` y pasa a `sent` o `error`.
+Va por el **carril `conversation`** de la cola:
+
+- **Adelanta a los envíos masivos.** Si un informe está esperando su delay de
+  90 s, la respuesta sale antes; el informe después reinicia su delay completo,
+  así el espaciado del masivo nunca se acorta.
+- **Ritmo humano:** 1,5–4 s desde el envío anterior, no instantáneo.
+- **Tope por conversación:** 20/min. Frena a un agente en loop antes de que
+  inunde a un cliente — que es lo que hace marcar un número como bot.
+- **Con WhatsApp caído se acepta igual** y sale cuando vuelve (espera hasta
+  5 min; después queda en `error`).
+
+### El ciclo de un agente
+
+```text
+GET  /conversations                       → ¿cuál tiene unread > 0?
+GET  /conversations/:id/messages          → lo nuevo desde mi marcador
+POST /conversations/:id/messages {text}   → responder (202)
+POST /conversations/:id/read {seq: next}  → marcar hasta dónde procesé
+```
+
+`test/agent-loop.test.js` corre este ciclo de punta a punta sobre
+`MemoryTransport`.
 
 ⚠️ **Los scopes sólo se hacen cumplir con `API_KEY` seteada.** Con `API_KEY`
 vacía un request sin key es `all`, así que una key de agente no protege nada.

@@ -112,3 +112,29 @@ test("config: capture is off unless INBOUND_CAPTURE=true, and chat.db lives in D
   assert.equal(loadConfig({ DATA_DIR: dataDir, INBOUND_CAPTURE: "true" }).i, true);
   assert.equal(loadConfig({ CHAT_DB_PATH: path.join(tmpDir, "x.db") }).p, path.join(tmpDir, "x.db"));
 });
+
+test("onStored is called for new and completed messages, never for a duplicate", () => {
+  const stored = [];
+  createInboundCapture({ transport, store, logger, onStored: (event) => stored.push(event) });
+
+  transport.receive({ address: "memory:alice", externalId: "R", status: "undecryptable" });
+  transport.receive({ address: "memory:alice", externalId: "R", status: "undecryptable" });
+  transport.receive({ address: "memory:alice", externalId: "R", text: "ya" });
+
+  assert.deepEqual(stored.map((e) => e.outcome), ["created", "completed"]);
+  assert.equal(stored[1].message.text, "ya");
+  assert.equal(stored[1].conversation.address, "memory:alice");
+});
+
+test("a failing onStored never breaks the capture", () => {
+  createInboundCapture({
+    transport,
+    store,
+    logger,
+    onStored: () => {
+      throw new Error("dispatcher down");
+    },
+  });
+  assert.doesNotThrow(() => transport.receive({ address: "memory:alice", text: "x", externalId: "A" }));
+  assert.equal(store.listMessages(store.resolveConversation("memory:alice").id).length, 1);
+});

@@ -148,4 +148,103 @@ describe("POST /conversations/:id/messages", () => {
     await app.drained();
     assert.equal(app.conversations.getMessage(res.body.message.id).status, "error");
   });
+
+  describe("with a file", () => {
+    async function upload(app, conv, key, { file, caption, extra = {} } = {}) {
+      const form = new FormData();
+      if (file) form.append("file", new Blob([file.data], { type: file.type }), file.name);
+      if (caption !== undefined) form.append("caption", caption);
+      for (const [k, v] of Object.entries(extra)) form.append(k, v);
+      const res = await fetch(`${app.base}/conversations/${conv.id}/messages`, {
+        method: "POST",
+        headers: { "x-api-key": key },
+        body: form,
+      });
+      return { status: res.status, body: await res.json() };
+    }
+
+    test("an image goes out as an image, with its caption", async (t) => {
+      const { app, key, conv } = await setup(t);
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.from("png-bytes"), type: "image/png", name: "foto.png" },
+        caption: "acá está",
+      });
+      assert.equal(res.status, 202);
+      assert.deepEqual(res.body.message.media, { type: "image", name: "foto.png", mimetype: "image/png", size: 9 });
+      assert.equal(res.body.message.text, "acá está");
+      await app.drained();
+
+      const [{ jid, content }] = app.sent;
+      assert.equal(jid, "5491111111111@s.whatsapp.net");
+      assert.deepEqual(Object.keys(content).sort(), ["caption", "image", "mimetype"]);
+      assert.equal(Buffer.from(content.image).toString(), "png-bytes");
+      assert.equal(content.caption, "acá está");
+      assert.equal(app.conversations.getMessage(res.body.message.id).status, "sent");
+    });
+
+    test("any other file goes out as a document with its name", async (t) => {
+      const { app, key, conv } = await setup(t);
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.from("%PDF"), type: "application/pdf", name: "presupuesto.pdf" },
+      });
+      assert.equal(res.status, 202);
+      assert.equal(res.body.message.media.type, "document");
+      assert.equal(res.body.message.text, null, "a file without caption has no text");
+      await app.drained();
+
+      const { content } = app.sent[0];
+      assert.deepEqual(Object.keys(content).sort(), ["caption", "document", "fileName", "mimetype"]);
+      assert.equal(content.fileName, "presupuesto.pdf");
+      assert.equal(content.mimetype, "application/pdf");
+      assert.equal(content.caption, "");
+    });
+
+    test("an image mimetype WhatsApp cannot show inline is sent as a document", async (t) => {
+      const { app, key, conv } = await setup(t);
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.from("gif"), type: "image/gif", name: "anim.gif" },
+      });
+      assert.equal(res.body.message.media.type, "document");
+    });
+
+    test("the transcript shows the file, never its bytes", async (t) => {
+      const { app, key, conv } = await setup(t);
+      await upload(app, conv, key, { file: { data: Buffer.from("x"), type: "image/jpeg", name: "a.jpg" } });
+      const read = await app.call("GET", `/conversations/${conv.id}/messages?since=0`, { key });
+      const out = read.body.messages.at(-1);
+      assert.deepEqual(out.media, { type: "image", name: "a.jpg", mimetype: "image/jpeg", size: 1 });
+    });
+
+    test("a file over the size limit is rejected with 413 and nothing is queued", async (t) => {
+      const { app, key, conv } = await setup(t, { maxMediaBytes: 10 });
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.alloc(11), type: "application/pdf", name: "grande.pdf" },
+      });
+      assert.equal(res.status, 413);
+      assert.equal(res.body.error, "file_too_large");
+      await app.drained();
+      assert.deepEqual(app.sent, []);
+    });
+
+    test("multipart without file nor text is 400; text alone in multipart works", async (t) => {
+      const { app, key, conv } = await setup(t);
+      assert.equal((await upload(app, conv, key, { caption: "" })).status, 400);
+      const textOnly = await upload(app, conv, key, { extra: { text: "hola" } });
+      assert.equal(textOnly.status, 202);
+      assert.equal(textOnly.body.message.media, null);
+    });
+
+    test("files count toward the per-conversation cap", async (t) => {
+      const { app, key, conv } = await setup(t, { maxRepliesPerMinute: 1 });
+      await reply(app, conv, key, { text: "uno" });
+      const res = await upload(app, conv, key, { file: { data: Buffer.from("x"), type: "image/png", name: "a.png" } });
+      assert.equal(res.status, 429);
+    });
+
+    test("a file for a conversation without grant is 404", async (t) => {
+      const { app, key, other } = await setup(t);
+      const res = await upload(app, other, key, { file: { data: Buffer.from("x"), type: "image/png", name: "a.png" } });
+      assert.equal(res.status, 404);
+    });
+  });
 });

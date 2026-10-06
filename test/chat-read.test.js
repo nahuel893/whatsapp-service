@@ -98,7 +98,8 @@ describe("GET /conversations/:id/messages", () => {
     assert.equal(res.body.gap, null);
     assert.deepEqual(res.body.messages.map((m) => m.text), ["m1", "m2", "m3"]);
     for (const m of res.body.messages) {
-      assert.deepEqual(Object.keys(m).sort(), ["at", "author", "direction", "id", "seq", "status", "text"]);
+      assert.deepEqual(Object.keys(m).sort(), ["at", "author", "direction", "id", "media", "seq", "status", "text"]);
+      assert.equal(m.media, null);
     }
   });
 

@@ -81,6 +81,7 @@ test("delivers a new message to every subscriber that can see the conversation",
     text: "hola",
     status: "received",
     at: "2026-01-01T00:00:00.000Z",
+    media: null,
   });
   assert.equal(fetch.calls[0].init.body.includes("WA-PROVIDER-ID"), false, "provider ids stay inside");
 });

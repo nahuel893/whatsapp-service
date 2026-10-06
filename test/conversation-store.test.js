@@ -86,6 +86,7 @@ test("recordInbound stores the message in domain shape", () => {
       author: "whatsapp:+5491111111111",
       text: "buenas",
       mediaId: null,
+      media: null,
       replyTo: null,
       status: "received",
       at: "2026-01-01T00:00:00.000Z",
@@ -302,4 +303,44 @@ test("countOutboundSince counts the replies of a conversation in a window", () =
   const aMinuteAgo = new Date(Date.now() - 60_000).toISOString();
   assert.equal(store.countOutboundSince(conv.id, aMinuteAgo), 2);
   assert.equal(store.countOutboundSince(conv.id, new Date(Date.now() + 1000).toISOString()), 0);
+});
+
+test("recordOutbound stores media metadata, never the bytes", () => {
+  const conv = seed(1);
+  const out = store.recordOutbound(conv.id, {
+    text: "el informe",
+    media: { type: "document", name: "informe.pdf", mimetype: "application/pdf", size: 1234 },
+  });
+  assert.deepEqual(out.media, { type: "document", name: "informe.pdf", mimetype: "application/pdf", size: 1234 });
+  assert.equal(store.getMessage(out.id).media.name, "informe.pdf");
+  assert.equal(store.recordOutbound(conv.id, { text: "solo texto" }).media, null);
+});
+
+test("a chat.db created before media columns existed is migrated in place", () => {
+  const { DatabaseSync } = require("node:sqlite");
+  const legacyPath = path.join(tmpDir, "legacy-chat.db");
+  const legacy = new DatabaseSync(legacyPath);
+  legacy.exec(`
+    CREATE TABLE conversations (id TEXT PRIMARY KEY, channel TEXT NOT NULL, address TEXT NOT NULL UNIQUE,
+      display_name TEXT, created_at TEXT NOT NULL, last_message_at TEXT,
+      next_seq INTEGER NOT NULL DEFAULT 1, pruned_through_seq INTEGER NOT NULL DEFAULT 0);
+    CREATE TABLE messages (id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, seq INTEGER NOT NULL,
+      direction TEXT NOT NULL, external_id TEXT, author TEXT, text TEXT, media_id TEXT, reply_to TEXT,
+      status TEXT NOT NULL, at TEXT NOT NULL, UNIQUE (conversation_id, seq), UNIQUE (conversation_id, external_id));
+    INSERT INTO conversations (id, channel, address, created_at, next_seq) VALUES ('conv_old', 'whatsapp', 'whatsapp:+1', '2026-01-01', 2);
+    INSERT INTO messages (id, conversation_id, seq, direction, text, status, at) VALUES ('msg_old', 'conv_old', 1, 'in', 'viejo', 'received', '2026-01-01');
+  `);
+  legacy.close();
+
+  const migrated = createConversationStore({ dbPath: legacyPath });
+  try {
+    assert.equal(migrated.getMessage("msg_old").media, null);
+    const out = migrated.recordOutbound("conv_old", {
+      text: "",
+      media: { type: "image", name: "a.png", mimetype: "image/png", size: 3 },
+    });
+    assert.equal(out.media.type, "image");
+  } finally {
+    migrated.close();
+  }
 });

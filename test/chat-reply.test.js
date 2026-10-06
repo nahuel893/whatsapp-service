@@ -124,4 +124,28 @@ describe("POST /conversations/:id/messages", () => {
     await app.drained();
     assert.equal(app.sent.length, 2);
   });
+
+  test("a reply accepted while disconnected goes out once the transport is back", async (t) => {
+    const { app, key, conv } = await setup(t);
+    app.control.connected = false;
+    const res = await reply(app, conv, key, { text: "te respondo apenas vuelva" });
+    assert.equal(res.status, 202, "accepted even with the transport down");
+
+    await new Promise((r) => setTimeout(r, 150));
+    assert.deepEqual(app.sent, [], "nothing is sent while disconnected");
+    app.control.connected = true;
+    await app.drained();
+
+    assert.equal(app.sent.length, 1);
+    const msg = app.conversations.getMessage(res.body.message.id);
+    assert.equal(msg.status, "sent");
+  });
+
+  test("a reply whose transport never comes back ends in error, not stuck", async (t) => {
+    const { app, key, conv } = await setup(t, { connectTimeoutMs: 100 });
+    app.control.connected = false;
+    const res = await reply(app, conv, key, { text: "x" });
+    await app.drained();
+    assert.equal(app.conversations.getMessage(res.body.message.id).status, "error");
+  });
 });

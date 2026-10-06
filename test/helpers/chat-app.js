@@ -23,7 +23,7 @@ const ADMIN = "admin-key";
  */
 function fakeManager() {
   let counter = 0;
-  const control = { sent: [], failSends: false };
+  const control = { sent: [], failSends: false, connected: true };
   const sock = {
     async sendMessage(jid, content) {
       if (control.failSends) throw new Error("socket closed");
@@ -35,7 +35,7 @@ function fakeManager() {
     },
   };
   const manager = {
-    getStatus: () => ({ connected: true, phone: "5490000000000", connectedAt: 1 }),
+    getStatus: () => ({ connected: control.connected, phone: "5490000000000", connectedAt: 1 }),
     getSock: () => sock,
     onEvent: () => () => {},
     async connect() {},
@@ -43,7 +43,7 @@ function fakeManager() {
   return { manager, control };
 }
 
-async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute } = {}) {
+async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeoutMs } = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-admin-"));
   const chatDb = path.join(tmpDir, "chat.db");
   const conversations = createConversationStore({ dbPath: chatDb });
@@ -59,7 +59,7 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute } = {}) {
   const { manager, control } = fakeManager();
 
   const app = express();
-  app.use(createRouter(manager, queue, { apiKey, principals, conversations, maxRepliesPerMinute }));
+  app.use(createRouter(manager, queue, { apiKey, principals, conversations, maxRepliesPerMinute, connectTimeoutMs }));
   queue.start();
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));

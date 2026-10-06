@@ -178,3 +178,86 @@ test("recordInbound rejects a message without externalId", () => {
   assert.throws(() => store.recordInbound(inbound({ externalId: "" })));
   assert.throws(() => store.recordInbound(inbound({ externalId: undefined })));
 });
+
+// ── F4: reading ──────────────────────────────────────────────────────────
+
+function seed(n, overrides = {}) {
+  let last;
+  for (let i = 0; i < n; i++) last = store.recordInbound(inbound({ text: `m${i + 1}`, ...overrides }));
+  return last.conversation;
+}
+
+test("readMessages returns messages after `since`, oldest first, with the next cursor", () => {
+  const conv = seed(5);
+  const page = store.readMessages(conv.id, { since: 2 });
+  assert.deepEqual(page.messages.map((m) => m.seq), [3, 4, 5]);
+  assert.equal(page.next, 5);
+  assert.equal(page.gap, null);
+});
+
+test("readMessages honours limit and the cursor resumes where it stopped", () => {
+  const conv = seed(5);
+  const first = store.readMessages(conv.id, { since: 0, limit: 2 });
+  assert.deepEqual(first.messages.map((m) => m.seq), [1, 2]);
+  const second = store.readMessages(conv.id, { since: first.next, limit: 2 });
+  assert.deepEqual(second.messages.map((m) => m.seq), [3, 4]);
+});
+
+test("readMessages with nothing new keeps the cursor where it was", () => {
+  const conv = seed(2);
+  assert.deepEqual(store.readMessages(conv.id, { since: 2 }), { messages: [], next: 2, gap: null });
+});
+
+test("prune deletes old messages as a contiguous block and declares the gap", () => {
+  const old = "2020-01-01T00:00:00.000Z";
+  const recent = new Date().toISOString();
+  const conv = seed(3, { at: old });
+  seed(2, { at: recent });
+
+  const result = store.prune(30);
+  assert.deepEqual(result, { messages: 3 });
+  assert.equal(store.getConversation(conv.id).prunedThroughSeq, 3);
+
+  const page = store.readMessages(conv.id, { since: 0 });
+  assert.deepEqual(page.gap, { from: 1, to: 3, reason: "retention" });
+  assert.deepEqual(page.messages.map((m) => m.seq), [4, 5]);
+
+  const after = store.readMessages(conv.id, { since: 3 });
+  assert.equal(after.gap, null, "a cursor at or past the watermark has no gap");
+
+  const empty = store.readMessages(conv.id, { since: 1 });
+  assert.deepEqual(empty.gap, { from: 2, to: 3, reason: "retention" });
+});
+
+test("prune only removes the old prefix: a recent message is never deleted", () => {
+  const conv = seed(1, { at: "2020-01-01T00:00:00.000Z" });
+  seed(1, { at: new Date().toISOString() });
+  seed(1, { at: "2020-01-02T00:00:00.000Z" }); // late, out-of-order provider timestamp
+
+  assert.deepEqual(store.prune(30), { messages: 1 });
+  assert.equal(store.getConversation(conv.id).prunedThroughSeq, 1);
+  assert.deepEqual(store.readMessages(conv.id, { since: 1 }).messages.map((m) => m.seq), [2, 3]);
+});
+
+test("prune with nothing old changes nothing", () => {
+  const conv = seed(2, { at: new Date().toISOString() });
+  assert.deepEqual(store.prune(30), { messages: 0 });
+  assert.equal(store.getConversation(conv.id).prunedThroughSeq, 0);
+});
+
+test("countInboundAfter counts inbound messages past a seq", () => {
+  const conv = seed(4);
+  assert.equal(store.countInboundAfter(conv.id, 0), 4);
+  assert.equal(store.countInboundAfter(conv.id, 3), 1);
+  assert.equal(store.countInboundAfter(conv.id, 4), 0);
+});
+
+test("listConversations orders by latest activity and can filter by id", () => {
+  const a = seed(1, { address: "whatsapp:+1", at: "2026-01-01T00:00:00.000Z" });
+  const b = seed(1, { address: "whatsapp:+2", at: "2026-01-03T00:00:00.000Z" });
+  const quiet = store.resolveConversation("whatsapp:+3");
+
+  assert.deepEqual(store.listConversations().map((c) => c.id), [b.id, a.id, quiet.id]);
+  assert.deepEqual(store.listConversations({ ids: [a.id, quiet.id] }).map((c) => c.id), [a.id, quiet.id]);
+  assert.deepEqual(store.listConversations({ ids: [] }), []);
+});

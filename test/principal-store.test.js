@@ -134,3 +134,21 @@ test("principals and grants survive a reopen", () => {
   assert.equal(principals.authenticate(key).id, principal.id);
   assert.equal(principals.isGranted(principal.id, conv.id), true);
 });
+
+test("read markers start at 0, only move forward, and are per principal", () => {
+  const a = principals.create({ name: "a" }).principal;
+  const b = principals.create({ name: "b" }).principal;
+  const conv = conversations.resolveConversation("whatsapp:+5490000000000");
+
+  assert.equal(principals.getReadMarker(a.id, conv.id), 0);
+  assert.equal(principals.setReadMarker(a.id, conv.id, 5), 5);
+  assert.equal(principals.setReadMarker(a.id, conv.id, 3), 5, "a lower seq does not rewind");
+  assert.equal(principals.getReadMarker(a.id, conv.id), 5);
+  assert.equal(principals.getReadMarker(b.id, conv.id), 0);
+});
+
+test("the implicit legacy principal can keep read markers too", () => {
+  const conv = conversations.resolveConversation("whatsapp:+5490000000000");
+  assert.equal(principals.setReadMarker("legacy", conv.id, 2), 2);
+  assert.equal(principals.getReadMarker("legacy", conv.id), 2);
+});

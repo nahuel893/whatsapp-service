@@ -190,9 +190,34 @@ Rama `feat/f3-principals`, apilada sobre F2. TDD estricto, runner `npm test`.
       `POST /conversations`, `POST/DELETE /conversations/:id/grants`.
 - [x] **F3.4 — Cableado en `index.js`** + docs. Smoke real con `API_KEY`: key de agente → 403 en `/send-text`, admin → 200.
 
+## F4 — Lectura: cursor, permisos y huecos
+
+Rama `feat/f4-cursor-read`, apilada sobre F3. TDD estricto.
+
+**Decisiones:**
+- **Cursor guardado en el servidor** (`read_markers`, por principal y
+  conversación). Un agente efímero no necesita persistir su `seq`: lee sin
+  `since`, procesa, y hace `POST /read`. `since` explícito sigue disponible.
+  El marcador sólo avanza (un `seq` menor no retrocede).
+- `GET /conversations` incluye `lastSeq`, `readSeq` y `unread` (entrantes
+  después del marcador) — lo que un agente necesita para saber a quién atender.
+- Sin grant → **404** (no 403): no se confirma que la conversación exista.
+- **Retención** (`CHAT_RETENTION_DAYS`, default 90): borra por antigüedad en
+  bloque contiguo desde el inicio y sube `pruned_through_seq`. Un pedido que
+  arranca antes de la marca recibe `gap: {from, to, reason: "retention"}`.
+- Forma pública de un mensaje: `{id, seq, direction, author, text, status, at}`.
+  El `externalId` del proveedor no sale.
+
+- [ ] **F4.1 — Store:** `listConversations`, `readMessages` (con gap),
+      `prune`, `lastInboundSeq`/`countInboundAfter`; `read_markers` en el
+      principal store.
+- [ ] **F4.2 — API:** `GET /conversations`, `GET /conversations/:id`,
+      `GET /conversations/:id/messages`, `POST /conversations/:id/read`.
+- [ ] **F4.3 — Retención al arranque** + config + docs.
+
 ## Próximo paso
 
-F4 — lectura por cursor.
+F4 en curso.
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

@@ -14,6 +14,7 @@ const { createMessageQueue } = require("../../lib/message-queue");
 const { createRouter } = require("../../lib/api");
 const { createConversationStore } = require("../../lib/conversation-store");
 const { createPrincipalStore } = require("../../lib/principal-store");
+const { createSubscriptionStore } = require("../../lib/subscription-store");
 
 const ADMIN = "admin-key";
 
@@ -48,6 +49,7 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeou
   const chatDb = path.join(tmpDir, "chat.db");
   const conversations = createConversationStore({ dbPath: chatDb });
   const principals = createPrincipalStore({ dbPath: chatDb });
+  const subscriptions = createSubscriptionStore({ dbPath: chatDb });
   const store = createJobStore({ dbPath: path.join(tmpDir, "queue.db") });
   const queue = createMessageQueue({
     store,
@@ -59,7 +61,7 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeou
   const { manager, control } = fakeManager();
 
   const app = express();
-  app.use(createRouter(manager, queue, { apiKey, principals, conversations, maxRepliesPerMinute, connectTimeoutMs }));
+  app.use(createRouter(manager, queue, { apiKey, principals, conversations, subscriptions, maxRepliesPerMinute, connectTimeoutMs }));
   queue.start();
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
@@ -101,8 +103,10 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeou
     control,
     principals,
     conversations,
+    subscriptions,
     async close() {
       await new Promise((resolve) => server.close(resolve));
+      subscriptions.close();
       principals.close();
       conversations.close();
       store.close();

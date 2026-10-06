@@ -5,7 +5,7 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
-## Sin publicar
+## [0.4.0] — 2026-10-06
 
 ### Agregado
 
@@ -114,6 +114,7 @@ de Baileys y con arranques reales sin sesión.
 Primera versión publicable: API HTTP de envío sobre Baileys v7, cola
 persistente en SQLite, autenticación por API key, `/health` y Dockerfile.
 
+[0.4.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nahuel893/whatsapp-service/releases/tag/v0.1.0

@@ -261,3 +261,45 @@ test("listConversations orders by latest activity and can filter by id", () => {
   assert.deepEqual(store.listConversations({ ids: [a.id, quiet.id] }).map((c) => c.id), [a.id, quiet.id]);
   assert.deepEqual(store.listConversations({ ids: [] }), []);
 });
+
+// ── F5: outbound ─────────────────────────────────────────────────────────
+
+test("recordOutbound stores a queued reply in the conversation's sequence", () => {
+  const conv = seed(2);
+  const out = store.recordOutbound(conv.id, { text: "respuesta", author: "whatsapp:+5499999999999" });
+
+  assert.deepEqual(
+    [out.seq, out.direction, out.status, out.text, out.externalId, out.author],
+    [3, "out", "queued", "respuesta", null, "whatsapp:+5499999999999"]
+  );
+  assert.equal(store.getConversation(conv.id).nextSeq, 4);
+  assert.equal(store.countInboundAfter(conv.id, 2), 0, "a reply is not unread");
+});
+
+test("markOutbound records the delivery outcome and the provider id", () => {
+  const conv = seed(1);
+  const out = store.recordOutbound(conv.id, { text: "x" });
+  store.markOutbound(out.id, { status: "sent", externalId: "WA-9" });
+  const sent = store.getMessage(out.id);
+  assert.deepEqual([sent.status, sent.externalId], ["sent", "WA-9"]);
+
+  const failed = store.recordOutbound(conv.id, { text: "y" });
+  store.markOutbound(failed.id, { status: "error" });
+  assert.equal(store.getMessage(failed.id).status, "error");
+});
+
+test("recordOutbound rejects an unknown conversation", () => {
+  assert.throws(() => store.recordOutbound("conv_0000000000000000", { text: "x" }), /conversation/);
+});
+
+test("countOutboundSince counts the replies of a conversation in a window", () => {
+  const conv = seed(1);
+  const other = seed(1, { address: "whatsapp:+2" });
+  store.recordOutbound(conv.id, { text: "a" });
+  store.recordOutbound(conv.id, { text: "b" });
+  store.recordOutbound(other.id, { text: "c" });
+
+  const aMinuteAgo = new Date(Date.now() - 60_000).toISOString();
+  assert.equal(store.countOutboundSince(conv.id, aMinuteAgo), 2);
+  assert.equal(store.countOutboundSince(conv.id, new Date(Date.now() + 1000).toISOString()), 0);
+});

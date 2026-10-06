@@ -25,7 +25,9 @@ Abstracción genérica de Baileys (WhatsApp Web) como API HTTP standalone. Cualq
 
 ## Estado y contexto
 
-- **Puerto**: `localhost:3001` (HTTP, sin TLS — detrás de Tailscale)
+- **Puerto**: `127.0.0.1:3001` (HTTP, sin TLS). **Sólo esta máquina**: el drop-in
+  `bind.conf` fija `HOST=127.0.0.1`, así no queda expuesto a la red local,
+  Tailscale ni Docker. Verificar con `ss -ltn | grep 3001`
 - **Repo**: `~/projects/whatsapp-service/`
 - **Systemd**: `whatsapp-service.service` (user unit)
 - **Número conectado**: el que se pareó por QR. `GET /status` lo devuelve
@@ -208,6 +210,8 @@ el pipeline de reportes incluido. Actualizá los consumidores en la misma pasada
 | `fast.conf` | `MESSAGE_QUEUE_MIN_DELAY_MS`, `MAX`, `WHATSAPP_WARMUP_MS` | Default actual: `0/0/0` (modo test rápido). Para producción → `90000/180000/120000` |
 | `diagnostics.conf` | `BAILEYS_LOG_LEVEL` | `silent`/`warn`/`debug`. Actual: `debug`. Para producción estable: `warn` |
 | `qr.conf` | `PRINT_QR=true` | Activo actualmente. Quitar cuando esté pareado y estable |
+| `bind.conf` | `HOST=127.0.0.1` | **No sacar**: sin esto el servicio escucha en todas las interfaces y, sin `API_KEY`, cualquiera en la red manda WhatsApp desde este número |
+| `prod.conf` | `WorkingDirectory`, `ExecStart`, `DATA_DIR` | Producción corre desde un worktree fijado (`~/projects/work/whatsapp-service-worktrees/prod`), no desde la carpeta de desarrollo. `DATA_DIR` apunta al `data/` original para conservar `queue.db` |
 
 Comandos:
 ```bash

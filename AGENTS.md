@@ -249,6 +249,37 @@ funcionen sin credenciales.
 | POST | `/send-file` | multipart `to`, `caption`, `file` | `{success, queued, job_id}` | Archivo a contacto (DM o grupo) |
 | POST | `/send-file-dm` | multipart `to`, `caption`, `file` | `{ok, queued, job_id}` | DM file — más confiable que `/send-file` para individuales |
 
+### Credenciales por consumidor (F3)
+
+Cada agente puede tener su propia key. La `API_KEY` compartida sigue siendo una
+credencial con **scope `all`** (todo, como siempre); una key creada con
+`POST /principals` tiene por default **scope `conversations`**: sólo ve las
+conversaciones que se le conceden, y recibe **403** en `/send-*`, `/groups`,
+`/status`, `/queue/*` y en toda la administración.
+
+| Método | Endpoint | Body | Response | Scope |
+|---|---|---|---|---|
+| POST | `/principals` | JSON `{name, scope?}` | 201 `{ok, principal, key}` — **la key se muestra una sola vez** | all |
+| GET | `/principals` | — | `{ok, principals[]}` (sin keys) | all |
+| DELETE | `/principals/:id` | — | `{ok}` · 404 | all |
+| POST | `/conversations` | JSON `{address}` (`whatsapp:+549…`, `whatsapp:group:<id>`) | 201/200 `{ok, conversation}` | all |
+| POST | `/conversations/:id/grants` | JSON `{principal_id}` | 201/200 `{ok}` · 404 | all |
+| DELETE | `/conversations/:id/grants/:principalId` | — | `{ok}` · 404 | all |
+
+⚠️ **Los scopes sólo se hacen cumplir con `API_KEY` seteada.** Con `API_KEY`
+vacía un request sin key es `all`, así que una key de agente no protege nada.
+
+```bash
+# alta de un agente y acceso a una conversación
+KEY=$(curl -s -X POST localhost:3001/principals -H "x-api-key: $API_KEY" \
+  -H 'content-type: application/json' -d '{"name":"agente-ventas"}' | jq -r .key)
+CONV=$(curl -s -X POST localhost:3001/conversations -H "x-api-key: $API_KEY" \
+  -H 'content-type: application/json' -d '{"address":"whatsapp:+5490000000000"}' | jq -r .conversation.id)
+PRN=$(curl -s localhost:3001/principals -H "x-api-key: $API_KEY" | jq -r '.principals[-1].id')
+curl -s -X POST localhost:3001/conversations/$CONV/grants -H "x-api-key: $API_KEY" \
+  -H 'content-type: application/json' -d "{\"principal_id\":\"$PRN\"}"
+```
+
 ### Ejemplos
 
 ```bash

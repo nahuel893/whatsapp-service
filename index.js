@@ -21,6 +21,7 @@ const { createMessageQueue } = require("./lib/message-queue");
 const { createBaileysTransport } = require("./lib/transport/baileys");
 const { createConversationStore } = require("./lib/conversation-store");
 const { createInboundCapture } = require("./lib/inbound-capture");
+const { createPrincipalStore } = require("./lib/principal-store");
 
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
 
@@ -40,6 +41,12 @@ const messageQueue = createMessageQueue({
   maxDelayMs: config.MESSAGE_QUEUE_MAX_DELAY_MS,
 });
 
+// chat.db holds conversations, principals and grants. It is always open: the
+// chat API needs it even when inbound capture is off. The conversation store
+// opens first because it owns the table grants reference.
+const chatStore = createConversationStore({ dbPath: config.CHAT_DB_PATH });
+const principalStore = createPrincipalStore({ dbPath: config.CHAT_DB_PATH });
+
 // ── Routes ───────────────────────────────────────────────────────────────
 // Registers the queue handlers as a side effect, so this must run before
 // messageQueue.start() replays anything left pending by the last run.
@@ -47,14 +54,13 @@ app.use(createRouter(baileysMgr, messageQueue, {
   warmupMs: config.WHATSAPP_WARMUP_MS,
   apiKey: config.API_KEY,
   transport,
+  principals: principalStore,
+  conversations: chatStore,
 }));
 
 // ── Inbound capture (opt-in) ─────────────────────────────────────────────
 // Subscribed before connecting, so no message of the first sync is missed.
-const chatStore = config.INBOUND_CAPTURE
-  ? createConversationStore({ dbPath: config.CHAT_DB_PATH })
-  : null;
-if (chatStore) {
+if (config.INBOUND_CAPTURE) {
   createInboundCapture({ transport, store: chatStore, logger });
 }
 
@@ -64,7 +70,7 @@ const server = app.listen(config.PORT, config.HOST, () => {
   logger.info({ sessionDir: config.SESSION_DIR }, "Directorio de sesión");
   logger.info({ queueDb: config.QUEUE_DB_PATH }, "Base de datos de la cola");
   logger.info(
-    { enabled: config.INBOUND_CAPTURE, chatDb: config.INBOUND_CAPTURE ? config.CHAT_DB_PATH : null },
+    { enabled: config.INBOUND_CAPTURE, chatDb: config.CHAT_DB_PATH },
     "Captura de mensajes entrantes"
   );
 
@@ -104,7 +110,8 @@ function shutdown(signal) {
       logger.error({ err }, "Error cerrando la base de datos de la cola");
     }
     try {
-      chatStore?.close();
+      principalStore.close();
+      chatStore.close();
     } catch (err) {
       logger.error({ err }, "Error cerrando la base de datos de conversaciones");
     }

@@ -160,9 +160,39 @@ todavía (eso es F4).
   prendida: arranca, crea `chat.db`, `/health` 200, apagado ordenado. No se
   probó la captura contra WhatsApp real (requiere parear otra sesión).
 
+## Camino a agentes funcionales (autorizado 2026-10-06)
+
+Pedido: "que tengamos agentes funcionales, utilizando la asincronía y las
+funciones anti-ratelimit". Orden: **F3 → F4 → F5 → F4b**. Con F5 un agente ya
+atiende (lee por cursor y responde); F4b agrega la entrega empujada.
+
+## F3 — Credenciales con identidad
+
+Rama `feat/f3-principals`, apilada sobre F2. TDD estricto, runner `npm test`.
+
+**Decisiones:**
+- Principals y grants viven en `chat.db`. La base se abre **siempre**;
+  `INBOUND_CAPTURE` sólo decide si se suscribe la captura.
+- Key `wsk_<64 hex>`, guardada como SHA-256; se muestra una sola vez al crearla.
+- Scopes: `all` (todo, como hoy) y `conversations` (sólo lo concedido; default).
+- `API_KEY` sigue siendo un principal `all` implícito (`id: "legacy"`). Con
+  `API_KEY` vacía la API sigue abierta: un request sin key es `legacy/all`.
+  **Los scopes sólo se hacen cumplir con `API_KEY` seteada.**
+- Endpoints viejos, `/groups`, `/queue/*`, `/status` y la administración
+  (`/principals`, grants, `POST /conversations`) piden `scope: all` → 403
+  `forbidden` si no. Un agente no puede escribirle a quien quiera.
+- 401 sin cambios (golden).
+
+- [x] **F3.1 — `lib/principal-store.js`** `2818ce2`.: create/authenticate/list/revoke,
+      grant/revokeGrant/isGranted/grantedConversationIds.
+- [x] **F3.2 — Auth con identidad** `0eea5b2`.: `req.principal`, `requireScope("all")`.
+- [x] **F3.3 — Endpoints de administración** `0b187ac`.: `POST/GET/DELETE /principals`,
+      `POST /conversations`, `POST/DELETE /conversations/:id/grants`.
+- [x] **F3.4 — Cableado en `index.js`** + docs. Smoke real con `API_KEY`: key de agente → 403 en `/send-text`, admin → 200.
+
 ## Próximo paso
 
-F3 (credenciales con identidad) y luego F4 (lectura por cursor + retención).
+F4 — lectura por cursor.
 Pendiente aparte: los dos warnings de `resolveLegacyTarget` de la revisión de F0
 (nombre de grupo sin letras ASCII tratado como teléfono; cache de grupos sin
 invalidar en un miss).

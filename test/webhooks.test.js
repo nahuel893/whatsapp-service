@@ -168,3 +168,13 @@ test("visibility is checked per subscription with the conversation id", async ()
   await dispatcher.dispatch({ conversation, message, outcome: "created" });
   assert.deepEqual(seen, [["prn_a", "conv_1"]]);
 });
+
+test("never follows a redirect: a 3xx is a failed delivery", async () => {
+  const { dispatcher, fetch } = setup({
+    subs: [subscription("a", "prn_a")],
+    responses: [302, 302, 302],
+  });
+  await dispatcher.dispatch({ conversation, message, outcome: "created" });
+  assert.equal(fetch.calls[0].init.redirect, "manual", "fetch must not follow redirects");
+  assert.equal(fetch.calls.length, 3, "a redirect is retried like any failure, never followed");
+});

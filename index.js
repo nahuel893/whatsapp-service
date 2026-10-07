@@ -69,6 +69,8 @@ app.use(createRouter(baileysMgr, messageQueue, {
   subscriptions: subscriptionStore,
   maxRepliesPerMinute: config.CONVERSATION_MAX_PER_MINUTE,
   maxMediaBytes: config.CHAT_MAX_MEDIA_MB * 1024 * 1024,
+  agentCanOpenConversations: config.AGENT_OPEN_CONVERSATIONS,
+  agentOpenPerHour: config.AGENT_OPEN_PER_HOUR,
 }));
 
 // ── Inbound capture (opt-in) ─────────────────────────────────────────────

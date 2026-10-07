@@ -57,6 +57,7 @@ describe("GET /conversations", () => {
       "id",
       "lastMessageAt",
       "lastSeq",
+      "openedBy",
       "readSeq",
       "unread",
     ]);

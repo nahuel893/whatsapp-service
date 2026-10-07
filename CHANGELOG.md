@@ -5,6 +5,25 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
+## [0.5.0] — 2026-10-07
+
+### Agregado
+
+- **Los agentes pueden iniciar conversaciones** (`POST /conversations` con
+  scope `agent`), opt-in con `AGENT_OPEN_CONVERSATIONS=true`. Tope por hora
+  compartido por todos los agentes de la instancia (`AGENT_OPEN_PER_HOUR`,
+  10) con 429 + `retryAfterSeconds`; reabrir una existente no cuenta.
+- Cada conversación registra `openedBy`: el principal que la abrió, o `null`
+  si la creó un mensaje entrante.
+
+### Cambiado
+
+- **Escribirle a un contacto que nunca escribió va por el carril `bulk`**,
+  con el pacing del masivo. El carril `conversation` queda para responder a
+  quien escribió.
+- La conversación pública gana el campo `openedBy`. `chat.db` se migra en el
+  lugar.
+
 ## [0.4.0] — 2026-10-06
 
 ### Agregado
@@ -114,6 +133,7 @@ de Baileys y con arranques reales sin sesión.
 Primera versión publicable: API HTTP de envío sobre Baileys v7, cola
 persistente en SQLite, autenticación por API key, `/health` y Dockerfile.
 
+[0.5.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.1.0...v0.2.0

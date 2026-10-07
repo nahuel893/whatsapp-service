@@ -80,6 +80,7 @@ describe("conversations and grants", () => {
       "createdAt",
       "id",
       "lastMessageAt",
+      "openedBy",
     ]);
     assert.equal(first.body.conversation.channel, "whatsapp");
 

@@ -44,7 +44,14 @@ function fakeManager() {
   return { manager, control };
 }
 
-async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeoutMs, maxMediaBytes } = {}) {
+async function startChatApp({
+  apiKey = ADMIN,
+  maxRepliesPerMinute,
+  connectTimeoutMs,
+  maxMediaBytes,
+  agentCanOpenConversations,
+  agentOpenPerHour,
+} = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-admin-"));
   const chatDb = path.join(tmpDir, "chat.db");
   const conversations = createConversationStore({ dbPath: chatDb });
@@ -61,7 +68,17 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeou
   const { manager, control } = fakeManager();
 
   const app = express();
-  app.use(createRouter(manager, queue, { apiKey, principals, conversations, subscriptions, maxRepliesPerMinute, connectTimeoutMs, maxMediaBytes }));
+  app.use(createRouter(manager, queue, {
+    apiKey,
+    principals,
+    conversations,
+    subscriptions,
+    maxRepliesPerMinute,
+    connectTimeoutMs,
+    maxMediaBytes,
+    agentCanOpenConversations,
+    agentOpenPerHour,
+  }));
   queue.start();
   const server = app.listen(0);
   await new Promise((resolve) => server.once("listening", resolve));
@@ -105,6 +122,7 @@ async function startChatApp({ apiKey = ADMIN, maxRepliesPerMinute, connectTimeou
     principals,
     conversations,
     subscriptions,
+    jobs: store,
     async close() {
       await new Promise((resolve) => server.close(resolve));
       subscriptions.close();

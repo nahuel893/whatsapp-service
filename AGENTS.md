@@ -166,6 +166,8 @@ Node lo carga solo (`process.loadEnvFile()`, sin dependencia).
 | `CONVERSATION_MIN_DELAY_MS` / `MAX` | `1500` / `4000` | Piso humano entre una respuesta y el envío anterior |
 | `CONVERSATION_MAX_PER_MINUTE` | `20` | Respuestas por conversación por minuto; más allá, 429 |
 | `CHAT_MAX_MEDIA_MB` | `16` | Tamaño máximo de un archivo en una respuesta; más grande, 413 |
+| `AGENT_OPEN_CONVERSATIONS` | `false` | `true` deja que el scope `agent` abra conversaciones con contactos que nunca escribieron |
+| `AGENT_OPEN_PER_HOUR` | `10` | Conversaciones nuevas por hora que pueden abrir **todos** los agentes de la instancia juntos; más allá, 429 |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras `connection: open` antes del primer envío |
@@ -273,7 +275,7 @@ Cada consumidor puede tener su propia key, con uno de tres scopes:
 | POST | `/principals` | JSON `{name, scope?}` | 201 `{ok, principal, key}` — **la key se muestra una sola vez** | all |
 | GET | `/principals` | — | `{ok, principals[]}` (sin keys) | all |
 | DELETE | `/principals/:id` | — | `{ok}` · 404 | all |
-| POST | `/conversations` | JSON `{address}` (`whatsapp:+549…`, `whatsapp:group:<id>`) | 201/200 `{ok, conversation}` | all |
+| POST | `/conversations` | JSON `{address}` (`whatsapp:+549…`, `whatsapp:group:<id>`) | 201/200 `{ok, conversation}` | all; `agent` si `AGENT_OPEN_CONVERSATIONS=true` |
 | POST | `/conversations/:id/grants` | JSON `{principal_id}` | 201/200 `{ok}` · 404 | all |
 | DELETE | `/conversations/:id/grants/:principalId` | — | `{ok}` · 404 | all |
 
@@ -298,6 +300,31 @@ marcador sólo avanza. `since` explícito sirve para releer.
 consumidor sabe exactamente qué contexto perdió. `status: "undecryptable"` es un
 mensaje que WhatsApp no pudo descifrar todavía; si el reintento llega, el mismo
 mensaje (mismo `seq`) pasa a `received` con su texto.
+
+### Iniciar una conversación (agentes)
+
+Con `AGENT_OPEN_CONVERSATIONS=true`, una key `agent` puede escribirle primero a
+un contacto: bienvenidas, avisos, recordatorios.
+
+```text
+POST /conversations {"address": "whatsapp:+5490000000000"}
+→ 201 {ok, conversation{id, …, openedBy}}   nueva
+→ 200 {ok, conversation}                    ya existía (no cuenta para el tope)
+→ 429 {ok:false, error:"rate_limited", retryAfterSeconds}
+POST /conversations/:id/messages {"text": "…"}   (o multipart con file)
+```
+
+Resguardos contra el baneo, porque escribirle a quien no escribió es el envío
+que más marca a un número:
+
+- **Tope por hora compartido** por todos los agentes de la instancia
+  (`AGENT_OPEN_PER_HOUR`). Protege al número, no a cada agente.
+- **El primer mensaje va por el carril `bulk`**, con el pacing del masivo. La
+  regla general: el carril `conversation` es para **responder** a quien
+  escribió. Apenas el contacto contesta, las respuestas pasan solas al carril
+  rápido.
+- **Auditoría:** `openedBy` dice qué principal abrió cada conversación
+  (`null` si la creó un mensaje entrante).
 
 ### Responder (F5)
 

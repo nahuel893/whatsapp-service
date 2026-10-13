@@ -24,7 +24,7 @@ const ADMIN = "admin-key";
  */
 function fakeManager() {
   let counter = 0;
-  const control = { sent: [], failSends: false, connected: true };
+  const control = { sent: [], presence: [], reads: [], failSends: false, connected: true };
   const sock = {
     async sendMessage(jid, content) {
       if (control.failSends) throw new Error("socket closed");
@@ -33,6 +33,12 @@ function fakeManager() {
     },
     async groupFetchAllParticipating() {
       return {};
+    },
+    async sendPresenceUpdate(state, jid) {
+      control.presence.push({ state, jid, at: Date.now() });
+    },
+    async readMessages(keys) {
+      control.reads.push(...keys);
     },
   };
   const manager = {
@@ -51,6 +57,7 @@ async function startChatApp({
   maxMediaBytes,
   agentCanOpenConversations,
   agentOpenPerHour,
+  typingRenewMs,
 } = {}) {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "wa-admin-"));
   const chatDb = path.join(tmpDir, "chat.db");
@@ -78,6 +85,7 @@ async function startChatApp({
     maxMediaBytes,
     agentCanOpenConversations,
     agentOpenPerHour,
+    typingRenewMs,
   }));
   queue.start();
   const server = app.listen(0);

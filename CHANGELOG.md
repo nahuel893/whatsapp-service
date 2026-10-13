@@ -5,6 +5,18 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
+## [0.6.0] — 2026-10-13
+
+### Agregado
+
+- **"Escribiendo…":** `POST /conversations/:id/typing` con `composing` (TTL de
+  1 a 120 s, renovado cada 8 s por el servicio) o `paused`. Se corta solo al
+  vencer el TTL o al enviarse un mensaje a esa conversación.
+- **Tildes azules:** `POST /conversations/:id/receipts {upToSeq}` marca como
+  leídos en el canal los mensajes entrantes hasta ese `seq`, cada uno una vez.
+- El puerto `ChatTransport` gana dos métodos **opcionales**, `setTyping` y
+  `markRead`, anunciados por `capabilities()`. Sin soporte: 501.
+
 ## [0.5.0] — 2026-10-07
 
 ### Agregado
@@ -133,6 +145,7 @@ de Baileys y con arranques reales sin sesión.
 Primera versión publicable: API HTTP de envío sobre Baileys v7, cola
 persistente en SQLite, autenticación por API key, `/health` y Dockerfile.
 
+[0.6.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.2.0...v0.3.0

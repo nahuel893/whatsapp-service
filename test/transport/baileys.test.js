@@ -308,6 +308,45 @@ describe("BaileysTransport — provider specifics", () => {
     });
   });
 
+  describe("typing and read receipts", () => {
+    test("setTyping sends a presence update to the chat", async () => {
+      const fake = createFakeManager();
+      const calls = [];
+      fake.manager.getSock().sendPresenceUpdate = async (state, jid) => calls.push([state, jid]);
+      const transport = createBaileysTransport(fake.manager);
+      await transport.setTyping({ jid: `${PHONE}@s.whatsapp.net` }, "composing");
+      await transport.setTyping({ jid: `${PHONE}@s.whatsapp.net` }, "paused");
+      assert.deepEqual(calls, [["composing", `${PHONE}@s.whatsapp.net`], ["paused", `${PHONE}@s.whatsapp.net`]]);
+    });
+
+    test("setTyping rejects any other state", async () => {
+      const transport = createBaileysTransport(createFakeManager().manager);
+      await assert.rejects(transport.setTyping({ jid: "1@s.whatsapp.net" }, "recording"));
+    });
+
+    test("markRead uses the exact key WhatsApp delivered, LID included", async () => {
+      const fake = createFakeManager();
+      const reads = [];
+      fake.manager.getSock().readMessages = async (keys) => reads.push(...keys);
+      const transport = createBaileysTransport(fake.manager);
+      transport.onMessage(() => {});
+      fake.upsert([inboundFor(`whatsapp:+${PHONE}`, "hola")]);
+      const [{ externalId }] = [{ externalId: `IN-${injected}` }];
+
+      await transport.markRead(transport.parseAddress(`whatsapp:+${PHONE}`), [externalId]);
+      assert.deepEqual(reads, [{ remoteJid: "100000000000000@lid", id: externalId, fromMe: false }]);
+    });
+
+    test("markRead falls back to the address for ids it never saw (e.g. after a restart)", async () => {
+      const fake = createFakeManager();
+      const reads = [];
+      fake.manager.getSock().readMessages = async (keys) => reads.push(...keys);
+      const transport = createBaileysTransport(fake.manager);
+      await transport.markRead({ jid: `${PHONE}@s.whatsapp.net` }, ["OLD-1"]);
+      assert.deepEqual(reads, [{ remoteJid: `${PHONE}@s.whatsapp.net`, id: "OLD-1", fromMe: false }]);
+    });
+  });
+
   describe("resolveLegacyTarget() — addressing of the pre-port endpoints", () => {
     test("keeps the rules the golden tests freeze", async () => {
       const transport = createBaileysTransport(createFakeManager().manager);

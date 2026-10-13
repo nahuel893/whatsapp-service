@@ -355,13 +355,36 @@ Va por el **carril `conversation`** de la cola:
 - **Con WhatsApp caído se acepta igual** y sale cuando vuelve (espera hasta
   5 min; después queda en `error`).
 
+### "Escribiendo…" y tildes azules
+
+| Método | Endpoint | Body | Response |
+|---|---|---|---|
+| POST | `/conversations/:id/typing` | `{"state": "composing", "ttlSeconds": 1–120}` (default 60) | `{ok, state, expiresAt}` |
+| POST | `/conversations/:id/typing` | `{"state": "paused"}` | `{ok, state:"paused", expiresAt:null}` |
+| POST | `/conversations/:id/receipts` | `{"upToSeq": n}` | `{ok, receipted}` — cuántos mensajes recibieron tildes ahora |
+
+- **Escribiendo…:** WhatsApp lo apaga solo a los ~10–25 s, así que el
+  servicio lo **renueva cada 8 s** hasta que vence el `ttlSeconds`, llega
+  `paused`, o sale un mensaje a esa conversación (lo que pase primero). Pensado
+  para cubrir un turno largo del agente: `composing` al tomar el mensaje, y la
+  respuesta lo corta sola.
+- **Tildes azules:** marcan como leídos en WhatsApp los mensajes entrantes
+  hasta `upToSeq`, cada uno una sola vez. Son independientes del marcador del
+  servidor (`POST .../read`): los tildes se mandan al **tomar** el mensaje y el
+  marcador se mueve al **terminar**.
+- Ninguno de los dos es un mensaje: no pasan por la cola ni cuentan para el
+  tope de respuestas. Mismos permisos que leer y responder (404 sin grant). Un
+  canal que no los soporte responde 501 `not_supported`.
+
 ### El ciclo de un agente
 
 ```text
-GET  /conversations                       → ¿cuál tiene unread > 0?
-GET  /conversations/:id/messages          → lo nuevo desde mi marcador
-POST /conversations/:id/messages {text}   → responder (202)
-POST /conversations/:id/read {seq: next}  → marcar hasta dónde procesé
+GET  /conversations                          → ¿cuál tiene unread > 0?
+GET  /conversations/:id/messages             → lo nuevo desde mi marcador
+POST /conversations/:id/receipts {upToSeq}   → tildes azules: "lo vi"
+POST /conversations/:id/typing {composing}   → "escribiendo…" mientras pienso
+POST /conversations/:id/messages {text}      → responder (202; corta el typing)
+POST /conversations/:id/read {seq: next}     → marcar hasta dónde procesé
 ```
 
 `test/agent-loop.test.js` corre este ciclo de punta a punta sobre

@@ -344,3 +344,12 @@ test("a chat.db created before media columns existed is migrated in place", () =
     migrated.close();
   }
 });
+
+test("takeUnreceipted returns inbound provider ids up to a seq, once", () => {
+  const conv = seed(3);
+  store.recordOutbound(conv.id, { text: "respuesta" });
+  const first = store.takeUnreceipted(conv.id, 2);
+  assert.equal(first.length, 2);
+  assert.deepEqual(store.takeUnreceipted(conv.id, 2), [], "already receipted");
+  assert.equal(store.takeUnreceipted(conv.id, 10).length, 1, "only the remaining inbound one");
+});

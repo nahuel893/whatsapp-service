@@ -70,3 +70,13 @@ test("MemoryTransport.receive() can simulate a group message", () => {
   transport.receive({ address: "memory:team", author: "memory:bob", text: "hola", kind: "group" });
   assert.equal(received[0].kind, "group");
 });
+
+test("MemoryTransport records typing and read receipts", async () => {
+  const transport = createMemoryTransport();
+  assert.equal(transport.capabilities().typing, true);
+  assert.equal(transport.capabilities().readReceipts, true);
+  await transport.setTyping(transport.parseAddress("memory:alice"), "composing");
+  await transport.markRead(transport.parseAddress("memory:alice"), ["m1", "m2"]);
+  assert.deepEqual(transport.presence, [{ address: "memory:alice", state: "composing" }]);
+  assert.deepEqual(transport.receipts, [{ address: "memory:alice", externalIds: ["m1", "m2"] }]);
+});

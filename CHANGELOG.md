@@ -5,6 +5,23 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
+## [0.7.0] — 2026-10-16
+
+### Corregido
+
+- **La sesión de WhatsApp ya no se destruye con el disco lleno.** Incidente
+  del 2026-10-16: el disco llegó al 100 % y la escritura de Baileys dejó
+  `creds.json` cortado en 4096 bytes en una instancia y vacío en la otra; los
+  dos números quedaron desvinculados. El almacén de sesión es propio
+  (`lib/session-store.js`), con el mismo formato de archivos:
+  - escritura atómica (temporal + `fsync` + `rename`): un guardado puede
+    fallar, pero nunca deja un archivo cortado;
+  - `creds.json.bak` con la última versión válida (hardlink, sin costo de
+    espacio), usado y restaurado si `creds.json` es ilegible al arrancar;
+  - escrituras serializadas por archivo;
+  - un guardado de credenciales que falla se loguea en vez de tirar abajo el
+    proceso.
+
 ## [0.6.0] — 2026-10-13
 
 ### Agregado
@@ -145,6 +162,7 @@ de Baileys y con arranques reales sin sesión.
 Primera versión publicable: API HTTP de envío sobre Baileys v7, cola
 persistente en SQLite, autenticación por API key, `/health` y Dockerfile.
 
+[0.7.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nahuel893/whatsapp-service/compare/v0.3.0...v0.4.0

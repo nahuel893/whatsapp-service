@@ -74,6 +74,9 @@ quedaron desvinculados.
 
 - [x] Video y GIF animado en las respuestas (`video/mp4` y
   `gifPlayback=true`), pedido de badie-ai. v0.8.0.
+- [x] Validación en vivo de `gifPlayback`: 4 mp4 de pixel-art (10–23 KB,
+  384×336, H.264 `yuv420p`, sin audio) llegaron animados en el chat,
+  2026-10-16.
 - [ ] Media entrante: hoy de un adjunto llega sólo el caption.
 - [ ] Convertir el markdown de los agentes al formato de WhatsApp (`**` → `*`,
   títulos, listas).

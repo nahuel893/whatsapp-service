@@ -108,6 +108,10 @@ function runTransportContract(name, makeFixture) {
       await transport.send(addr, image);
       assert.deepEqual(lastSent().content, image);
 
+      const gif = { video: { data: Buffer.from("mp4"), mimetype: "video/mp4" }, caption: "", gifPlayback: true };
+      await transport.send(addr, gif);
+      assert.deepEqual(lastSent().content, gif);
+
       const doc = {
         document: { data: Buffer.from("xlsx"), fileName: "a.xlsx", mimetype: "application/x" },
         caption: "",

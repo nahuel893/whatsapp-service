@@ -331,12 +331,34 @@ que más marca a un número:
 | Método | Endpoint | Body | Response |
 |---|---|---|---|
 | POST | `/conversations/:id/messages` | JSON `{text}` (1–4096) | **202** `{ok, message{…, direction:"out", status:"queued"}, job_id}` · 429 `{ok, error:"rate_limited", retryAfterSeconds}` |
-| POST | `/conversations/:id/messages` | multipart `file` + `caption` opcional | igual; 413 `file_too_large` si supera `CHAT_MAX_MEDIA_MB` |
+| POST | `/conversations/:id/messages` | multipart `file` + `caption` opcional + `gifPlayback` opcional | igual; 413 `file_too_large` si supera `CHAT_MAX_MEDIA_MB` |
 
-**Archivos e imágenes:** JPEG, PNG y WebP salen como **imagen** (se ven en el
-chat); cualquier otro tipo, como **documento** con su nombre. Van por el mismo
-carril y cuentan para el mismo tope. Los bytes viajan en la cola y se borran al
-enviarse; la transcripción guarda sólo `media: {type, name, mimetype, size}`.
+**Archivos, imágenes, video y GIF:** cómo sale cada archivo depende de su
+mimetype, y queda en `media.type`:
+
+| Mimetype | `gifPlayback` | Sale como | `media.type` |
+|---|---|---|---|
+| `image/jpeg`, `image/png`, `image/webp` | — | imagen, se ve en el chat | `image` |
+| `video/mp4` | ausente o `false` | video, se reproduce en el chat | `video` |
+| `video/mp4` | `true` | **GIF animado**: en loop y sin sonido | `gif` |
+| cualquier otro (incluido `image/gif`) | — | documento con su nombre | `document` |
+
+WhatsApp no tiene GIF nativo: un GIF animado es un mp4 con `gifPlayback`. El
+servicio no convierte; el consumidor manda el mp4 (H.264, `yuv420p`, lados
+pares, sin audio, p. ej. `ffmpeg -i a.gif -movflags faststart -pix_fmt yuv420p
+-vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -an a.mp4`). `gifPlayback=true` con
+otro tipo, o sin archivo, es 400 `invalid_request`; un valor que no sea
+`true`/`false`, también. Un `image/gif` sin flag sigue saliendo como documento,
+como antes.
+
+Todos van por el mismo carril y cuentan para el mismo tope. Los bytes viajan en
+la cola y se borran al enviarse; la transcripción guarda sólo
+`media: {type, name, mimetype, size}`.
+
+```bash
+curl -X POST localhost:3001/conversations/$CONV/messages -H "x-api-key: $KEY" \
+  -F "file=@anim.mp4;type=video/mp4" -F "gifPlayback=true" -F "caption=¡Listo!"
+```
 
 ```bash
 curl -X POST localhost:3001/conversations/$CONV/messages -H "x-api-key: $KEY" \
@@ -394,7 +416,8 @@ POST /conversations/:id/read {seq: next}     → marcar hasta dónde procesé
 
 Servidor MCP por stdio, sin dependencias, que expone la API como
 herramientas: `list_inbox`, `read_new_messages` (con `mark_read`), `reply`,
-`send_file`, `mark_read` y `get_transcript`. `send_file` sólo puede leer
+`send_file` (con `gif_playback` para un mp4 animado), `mark_read` y
+`get_transcript`. `send_file` sólo puede leer
 archivos dentro de `WA_MCP_FILES_DIR` (resuelve symlinks y rechaza lo que caiga
 afuera); sin esa variable, la herramienta está deshabilitada. Salidas compactas y errores accionables
 ("esperá 30 s"). Es un consumidor más de la API pública.

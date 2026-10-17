@@ -74,6 +74,13 @@ function toDomainContent(content) {
   if ("image" in content) {
     return { image: { data: content.image, mimetype: content.mimetype }, caption: content.caption };
   }
+  if ("video" in content) {
+    return {
+      video: { data: content.video, mimetype: content.mimetype },
+      caption: content.caption,
+      ...(content.gifPlayback ? { gifPlayback: true } : {}),
+    };
+  }
   return {
     document: { data: content.document, fileName: content.fileName, mimetype: content.mimetype },
     caption: content.caption,
@@ -158,6 +165,23 @@ describe("BaileysTransport — provider specifics", () => {
     assert.deepEqual(fake.sent[0].content, { text: "hola" });
     assert.deepEqual(Object.keys(fake.sent[1].content).sort(), ["caption", "image", "mimetype"]);
     assert.deepEqual(Object.keys(fake.sent[2].content).sort(), ["caption", "document", "fileName", "mimetype"]);
+  });
+
+  test("send() hands Baileys a video, and a gif as a video with gifPlayback", async () => {
+    const fake = createFakeManager();
+    const transport = createBaileysTransport(fake.manager);
+    const addr = { jid: `${PHONE}@s.whatsapp.net` };
+
+    await transport.send(addr, { video: { data: Buffer.from("v"), mimetype: "video/mp4" }, caption: "c" });
+    await transport.send(addr, { video: { data: Buffer.from("g"), mimetype: "video/mp4" }, caption: "", gifPlayback: true });
+
+    assert.deepEqual(Object.keys(fake.sent[0].content).sort(), ["caption", "mimetype", "video"]);
+    assert.deepEqual(fake.sent[1].content, {
+      video: Buffer.from("g"),
+      caption: "",
+      mimetype: "video/mp4",
+      gifPlayback: true,
+    });
   });
 
   test("send() still returns an id when Baileys resolves without a message", async () => {

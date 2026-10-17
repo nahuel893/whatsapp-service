@@ -210,6 +210,7 @@ describe("send_file", () => {
     });
     fs.writeFileSync(path.join(dir, "catalogo.pdf"), "%PDF-catalogo");
     fs.writeFileSync(path.join(dir, "foto.png"), "png");
+    fs.writeFileSync(path.join(dir, "anim.mp4"), "mp4");
     fs.writeFileSync(path.join(outside, "secreto.txt"), "no");
     fs.symlinkSync(path.join(outside, "secreto.txt"), path.join(dir, "atajo.txt"));
     const server = createMcpServer({ baseUrl: ctx.app.base, apiKey: ctx.key, filesDir: allowed ? dir : undefined });
@@ -229,6 +230,30 @@ describe("send_file", () => {
     assert.equal(app.sent[0].content.fileName, "catalogo.pdf");
     assert.equal(app.sent[0].content.caption, "el catálogo");
     assert.equal(Buffer.from(app.sent[1].content.image).toString(), "png");
+  });
+
+  test("sends an mp4 as a video, or as an animated gif with gif_playback", async (t) => {
+    const { app, call, conv } = await setupFiles(t);
+    const video = await call("send_file", { conversation_id: conv.id, path: "anim.mp4" });
+    assert.equal(video.isError, undefined, text(video));
+    assert.match(text(video), /"video"/);
+    const gif = await call("send_file", { conversation_id: conv.id, path: "anim.mp4", gif_playback: true });
+    assert.equal(gif.isError, undefined, text(gif));
+    assert.match(text(gif), /"gif"/);
+    await app.drained();
+
+    assert.equal(app.sent[0].content.gifPlayback, undefined);
+    assert.equal(app.sent[1].content.gifPlayback, true);
+    assert.equal(app.sent[1].content.mimetype, "video/mp4");
+  });
+
+  test("gif_playback on a file that is not an mp4 is an actionable error", async (t) => {
+    const { app, call, conv } = await setupFiles(t);
+    const res = await call("send_file", { conversation_id: conv.id, path: "foto.png", gif_playback: true });
+    assert.equal(res.isError, true);
+    assert.match(text(res), /mp4/);
+    await app.drained();
+    assert.equal(app.sent.length, 0);
   });
 
   test("refuses paths outside the allowed directory, including through symlinks", async (t) => {

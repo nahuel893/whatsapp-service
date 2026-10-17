@@ -69,14 +69,17 @@ const TOOLS = [
     name: "send_file",
     description:
       "Send a file to the customer of a conversation: images (jpg, png, webp) " +
-      "show inline, anything else arrives as a document. `path` is relative to " +
-      "the directory this server is allowed to read from.",
+      "show inline, mp4 plays as a video, anything else arrives as a document. " +
+      "For an animated GIF, send it as an mp4 with gif_playback (WhatsApp has no " +
+      "native GIF). `path` is relative to the directory this server is allowed " +
+      "to read from.",
     inputSchema: {
       type: "object",
       properties: {
         conversation_id: { type: "string" },
         path: { type: "string", description: "File path inside the allowed directory." },
         caption: { type: "string", maxLength: 4096 },
+        gif_playback: { type: "boolean", description: "Loop an mp4 muted, as an animated GIF." },
       },
       required: ["conversation_id", "path"],
     },
@@ -124,6 +127,7 @@ const MIME_BY_EXTENSION = {
   ".png": "image/png",
   ".webp": "image/webp",
   ".gif": "image/gif",
+  ".mp4": "video/mp4",
   ".pdf": "application/pdf",
   ".csv": "text/csv",
   ".txt": "text/plain",
@@ -256,6 +260,7 @@ function createMcpServer({ baseUrl, apiKey, filesDir, fetch = globalThis.fetch }
       const form = new FormData();
       form.append("file", new Blob([fs.readFileSync(file)], { type: mimetype }), path.basename(file));
       if (typeof args.caption === "string" && args.caption !== "") form.append("caption", args.caption);
+      if (args.gif_playback === true) form.append("gifPlayback", "true");
       const { message } = await api("POST", `/conversations/${encodeURIComponent(id)}/messages`, form);
       return { queued: true, seq: message.seq, file: { type: message.media.type, name: message.media.name } };
     },

@@ -207,6 +207,72 @@ describe("POST /conversations/:id/messages", () => {
       assert.equal(res.body.message.media.type, "document");
     });
 
+    test("an mp4 goes out as a video, with its caption", async (t) => {
+      const { app, key, conv } = await setup(t);
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.from("mp4-bytes"), type: "video/mp4", name: "clip.mp4" },
+        caption: "mirá",
+      });
+      assert.equal(res.status, 202);
+      assert.deepEqual(res.body.message.media, { type: "video", name: "clip.mp4", mimetype: "video/mp4", size: 9 });
+      await app.drained();
+
+      const { content } = app.sent[0];
+      assert.deepEqual(Object.keys(content).sort(), ["caption", "mimetype", "video"]);
+      assert.equal(Buffer.from(content.video).toString(), "mp4-bytes");
+      assert.equal(content.mimetype, "video/mp4");
+      assert.equal(content.caption, "mirá");
+    });
+
+    test("an mp4 with gifPlayback=true goes out as an animated gif", async (t) => {
+      const { app, key, conv } = await setup(t);
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.from("mp4"), type: "video/mp4", name: "anim.mp4" },
+        extra: { gifPlayback: "true" },
+      });
+      assert.equal(res.status, 202);
+      assert.deepEqual(res.body.message.media, { type: "gif", name: "anim.mp4", mimetype: "video/mp4", size: 3 });
+      await app.drained();
+
+      const { content } = app.sent[0];
+      assert.deepEqual(Object.keys(content).sort(), ["caption", "gifPlayback", "mimetype", "video"]);
+      assert.equal(content.gifPlayback, true);
+
+      const read = await app.call("GET", `/conversations/${conv.id}/messages?since=0`, { key });
+      assert.equal(read.body.messages.at(-1).media.type, "gif", "the transcript keeps it as a gif");
+    });
+
+    test("gifPlayback on anything but an mp4 is rejected and nothing is queued", async (t) => {
+      const { app, key, conv } = await setup(t);
+      for (const file of [
+        { data: Buffer.from("gif"), type: "image/gif", name: "anim.gif" },
+        { data: Buffer.from("png"), type: "image/png", name: "a.png" },
+      ]) {
+        const res = await upload(app, conv, key, { file, extra: { gifPlayback: "true" } });
+        assert.equal(res.status, 400);
+        assert.equal(res.body.error, "invalid_request");
+        assert.match(res.body.message, /video\/mp4/);
+      }
+      const noFile = await upload(app, conv, key, { caption: "hola", extra: { gifPlayback: "true" } });
+      assert.equal(noFile.status, 400);
+      await app.drained();
+      assert.equal(app.sent.length, 0);
+    });
+
+    test("gifPlayback only accepts true or false", async (t) => {
+      const { app, key, conv } = await setup(t);
+      const res = await upload(app, conv, key, {
+        file: { data: Buffer.from("mp4"), type: "video/mp4", name: "a.mp4" },
+        extra: { gifPlayback: "yes" },
+      });
+      assert.equal(res.status, 400);
+      const off = await upload(app, conv, key, {
+        file: { data: Buffer.from("mp4"), type: "video/mp4", name: "a.mp4" },
+        extra: { gifPlayback: "false" },
+      });
+      assert.equal(off.body.message.media.type, "video");
+    });
+
     test("the transcript shows the file, never its bytes", async (t) => {
       const { app, key, conv } = await setup(t);
       await upload(app, conv, key, { file: { data: Buffer.from("x"), type: "image/jpeg", name: "a.jpg" } });

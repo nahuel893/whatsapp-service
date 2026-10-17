@@ -5,6 +5,26 @@ Versiones según [SemVer](https://semver.org/lang/es/). Mientras la versión sea
 anteriores al chat bidireccional (`/send-*`, `/status`, `/queue/*`, `/groups`,
 `/health`) **no**: su contrato está congelado en `test/golden/`.
 
+## [0.8.0] — 2026-10-16
+
+### Agregado
+
+- **Video y GIF animado en las respuestas.** `POST /conversations/:id/messages`
+  con un `file` `video/mp4` sale como **video** (`media.type: "video"`); con
+  el campo `gifPlayback=true`, como **GIF animado**, en loop y sin sonido
+  (`media.type: "gif"`). WhatsApp no tiene GIF nativo: el consumidor manda el
+  mp4 (H.264, `yuv420p`, lados pares, sin audio); el servicio no convierte.
+- `gifPlayback=true` sin un mp4, o con un valor que no sea `true`/`false`,
+  responde 400 `invalid_request` con un mensaje que dice qué mandar.
+- El puerto `ChatTransport` suma el contenido
+  `{video: {data, mimetype}, caption?, gifPlayback?}`.
+- MCP: `send_file` acepta `.mp4` y el argumento `gif_playback`.
+
+### Sin cambios
+
+- Un `image/gif` sin `gifPlayback` sigue saliendo como documento, igual que
+  en 0.7.0. Las imágenes y los documentos no cambian.
+
 ## [0.7.0] — 2026-10-16
 
 ### Corregido

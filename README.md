@@ -1,12 +1,22 @@
 # WhatsApp Service
 
-API HTTP para enviar mensajes, imágenes y archivos por WhatsApp. Envuelve
+API HTTP para WhatsApp. Envuelve
 [Baileys](https://github.com/WhiskeySockets/Baileys) (WhatsApp Web) detrás de
-unos pocos endpoints, así cualquier aplicación puede mandar un mensaje sin
-manejar la conexión, la sesión Signal ni el pareo por QR.
+unos pocos endpoints, así cualquier aplicación puede mandar un mensaje, o
+mantener una conversación, sin manejar la conexión, la sesión Signal ni el
+pareo por QR.
 
-**No** trae lógica de agente, allowlist, deduplicación ni forwarding de mensajes
-entrantes. Eso es del consumidor.
+Sirve para dos cosas:
+
+- **Envíos** (`/send-*`): informes, avisos, archivos, con una cola espaciada
+  para que el número no quede marcado como bot.
+- **Conversaciones** (`/conversations`): un agente recibe cada mensaje por
+  webhook, lee la transcripción y responde, con su propia key y límites de
+  ritmo. Incluye un [servidor MCP](#servidor-mcp) y un
+  [agente de referencia](#agente-de-referencia).
+
+El servicio es genérico: **no** trae lógica de agente, allowlist ni
+deduplicación. Eso es del consumidor.
 
 ```bash
 curl -X POST http://localhost:3001/send-file-dm \
@@ -41,6 +51,10 @@ envíos, y ese cuidado se escribe una vez en vez de repetirse en cada consumidor
 - **La entrega es verificable.** Cada envío devuelve un `job_id` consultable
   después, incluso pasado un restart.
 - **Envíos secuenciales y espaciados**, con delay configurable.
+- **Un disco lleno no destruye la sesión.** Cada archivo de la sesión se
+  escribe de forma atómica (temporal + `fsync` + `rename`) y `creds.json`
+  guarda su última versión válida en `creds.json.bak`. Un guardado puede
+  fallar, pero nunca deja las credenciales cortadas.
 
 Lo que **no** garantiza: exactly-once. Un job interrumpido por una caída se
 reintenta, así que un mensaje puede salir dos veces si el proceso murió justo
@@ -69,7 +83,7 @@ En el primer arranque imprime un QR en los logs. Escanealo desde el celular:
 queda en `session/` y sobrevive a los reinicios.
 
 ```bash
-npm test    # 161 tests, sin red y sin WhatsApp real
+npm test    # 348 tests, sin red y sin WhatsApp real
 ```
 
 ---
@@ -90,7 +104,14 @@ solo.
 | `QUEUE_DB_PATH` | `$DATA_DIR/queue.db` | Archivo SQLite de la cola |
 | `QUEUE_RETENTION_DAYS` | `30` | Días de jobs terminados que se conservan |
 | `INBOUND_CAPTURE` | `false` | `true` persiste los mensajes entrantes en `chat.db`. **Escribe a disco todos los chats del número** |
-| `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones y mensajes |
+| `INBOUND_GROUPS` | `false` | `true` también captura mensajes de **grupos**. Apagado, un mensaje de grupo se descarta antes de guardarse |
+| `CHAT_DB_PATH` | `$DATA_DIR/chat.db` | Archivo SQLite de conversaciones, mensajes, keys y suscripciones |
+| `CHAT_RETENTION_DAYS` | `90` | Días de historial de conversación |
+| `CONVERSATION_MIN_DELAY_MS` / `MAX` | `1500` / `4000` | Pausa humana antes de cada respuesta |
+| `CONVERSATION_MAX_PER_MINUTE` | `20` | Respuestas por conversación por minuto; más allá, 429 |
+| `CHAT_MAX_MEDIA_MB` | `16` | Tamaño máximo de un archivo en una respuesta; más grande, 413 |
+| `AGENT_OPEN_CONVERSATIONS` | `false` | `true` deja que un agente le escriba primero a un contacto |
+| `AGENT_OPEN_PER_HOUR` | `10` | Conversaciones nuevas por hora, entre todos los agentes de la instancia |
 | `MESSAGE_QUEUE_MIN_DELAY_MS` | `60000` | Piso del delay entre envíos |
 | `MESSAGE_QUEUE_MAX_DELAY_MS` | `120000` | Techo del delay entre envíos |
 | `WHATSAPP_WARMUP_MS` | `0` | Espera tras conectar, antes del primer envío |
@@ -114,9 +135,12 @@ curl -H "Authorization: Bearer $API_KEY" localhost:3001/status
 
 Para generar una: `openssl rand -hex 32`.
 
+Esa key es la de operador (scope `all`). Cada consumidor puede tener la suya,
+ver [Conversaciones](#conversaciones).
+
 ---
 
-## Endpoints
+## Endpoints de envío
 
 | Método | Endpoint | Devuelve | Para qué |
 |---|---|---|---|
@@ -161,6 +185,99 @@ curl -s -H "x-api-key: $API_KEY" localhost:3001/queue/job/42
 
 `status` puede ser `pending`, `processing`, `sent` o `error`. Con los delays de
 producción, un job puede tardar minutos en salir: es a propósito.
+
+---
+
+## Conversaciones
+
+El servicio guarda lo que llega (`INBOUND_CAPTURE=true`) y lo expone como
+conversaciones que un agente puede leer y responder. Detalle completo de cada
+endpoint y del contrato del webhook en [`AGENTS.md`](AGENTS.md).
+
+### Keys por consumidor
+
+| Scope | Ve | Puede administrar y usar `/send-*` |
+|---|---|---|
+| `all` | todas las conversaciones | sí — es la `API_KEY`, o una key de operador |
+| `agent` | todas, sin grants | no — un agente que atiende a quien escriba |
+| `conversations` (default) | sólo las que se le concedieron | no |
+
+```bash
+curl -s -X POST localhost:3001/principals -H "x-api-key: $API_KEY" \
+  -H 'content-type: application/json' -d '{"name":"agente-ventas","scope":"agent"}'
+# {"ok":true,"principal":{...},"key":"wsk_..."}   ← la key se muestra una sola vez
+```
+
+Una conversación que la key no puede ver responde 404, igual que una que no
+existe. Los scopes sólo se hacen cumplir con `API_KEY` seteada.
+
+### El ciclo de un agente
+
+```text
+POST /subscriptions {url}                    → el servicio le avisa cada mensaje (webhook firmado)
+GET  /conversations/:id/messages             → lo nuevo desde su marcador
+POST /conversations/:id/receipts {upToSeq}   → tildes azules
+POST /conversations/:id/typing {composing}   → "escribiendo…" mientras piensa
+POST /conversations/:id/messages {text}      → responder (202; corta el "escribiendo…")
+POST /conversations/:id/read {seq}           → marcar hasta dónde procesó
+```
+
+- **El marcador lo guarda el servidor**: si el agente se reinicia, retoma
+  donde quedó.
+- **Webhook para la latencia, marcador para la garantía.** Cada entrega va
+  firmada con HMAC-SHA256 y se reintenta a 1, 5 y 25 s. Si igual se pierde,
+  el mensaje sigue en el almacén y el agente lo lee desde su marcador.
+- **Las respuestas adelantan a los envíos masivos**, con una pausa de
+  1,5–4 s y un tope de 20 por minuto por conversación, para que un agente en
+  loop no inunde a nadie.
+- **Escribirle primero a un contacto** (`POST /conversations {address}`) pide
+  `AGENT_OPEN_CONVERSATIONS=true`, tiene un tope por hora y el primer mensaje
+  sale con el ritmo del envío masivo.
+
+### Archivos, imágenes, video y GIF
+
+`POST /conversations/:id/messages` en multipart, con `file`, `caption`
+opcional y `gifPlayback` opcional:
+
+| Mimetype | `gifPlayback` | Sale como |
+|---|---|---|
+| `image/jpeg`, `image/png`, `image/webp` | — | imagen |
+| `video/mp4` | ausente o `false` | video |
+| `video/mp4` | `true` | GIF animado (en loop, sin sonido) |
+| cualquier otro, incluido `image/gif` | — | documento |
+
+WhatsApp no tiene GIF nativo: un GIF animado es un mp4 con `gifPlayback`. El
+servicio no convierte; el consumidor manda el mp4.
+
+```bash
+curl -X POST localhost:3001/conversations/$CONV/messages -H "x-api-key: $KEY" \
+  -F "file=@anim.mp4;type=video/mp4" -F "gifPlayback=true"
+```
+
+### Servidor MCP
+
+`packages/mcp` expone la API como herramientas para un agente por stdio, sin
+dependencias: `list_inbox`, `read_new_messages`, `reply`, `send_file`,
+`mark_read` y `get_transcript`. `send_file` sólo lee dentro de
+`WA_MCP_FILES_DIR`; sin esa variable queda deshabilitada.
+
+```json
+{ "mcpServers": { "whatsapp": {
+    "command": "node",
+    "args": ["/ruta/a/whatsapp-service/packages/mcp/index.js"],
+    "env": { "WA_SERVICE_URL": "http://127.0.0.1:3001", "WA_SERVICE_API_KEY": "wsk_…" } } } }
+```
+
+### Agente de referencia
+
+`examples/claude-agent` es un consumidor completo: recibe el webhook, verifica
+la firma, junta las ráfagas de mensajes, le pide la respuesta a `claude -p`
+**sin herramientas** y contesta.
+
+```bash
+WA_SERVICE_URL=http://127.0.0.1:3001 WA_SERVICE_API_KEY=wsk_… \
+  AGENT_SYSTEM_PROMPT="Sos el asistente de …" node examples/claude-agent/index.js
+```
 
 ---
 
@@ -230,15 +347,21 @@ index.js                 arranque, montaje de rutas, shutdown ordenado
 lib/
   baileys.js             conexión, reconexión, QR, estado de sesión
   api.js                 endpoints HTTP y handlers por tipo de job
-  auth.js                middleware de API key
+  chat-api.js            conversaciones, keys, respuestas, typing, suscripciones
+  auth.js                middleware de API key y scopes
   job-store.js           persistencia de la cola (node:sqlite)
-  conversation-store.js  conversaciones y mensajes entrantes (chat.db)
+  conversation-store.js  conversaciones y mensajes (chat.db)
+  principal-store.js     keys por consumidor, grants y marcadores de lectura
+  subscription-store.js  suscripciones de webhook
+  webhooks.js            entrega firmada de los mensajes entrantes
   inbound-capture.js     guarda lo que llega; opt-in con INBOUND_CAPTURE
   transport/             puerto ChatTransport + adaptadores Baileys y memoria
-  message-queue.js       cola secuencial con delay y warmup
-  session-store.js       wrapper de useMultiFileAuthState
+  message-queue.js       cola con carriles bulk y conversation, delay y warmup
+  session-store.js       sesión de WhatsApp con escritura atómica y backup
   config.js              variables de entorno
-test/                    161 tests con node:test (golden/ = contrato congelado)
+packages/mcp/            servidor MCP por stdio
+examples/claude-agent/   agente de referencia
+test/                    348 tests con node:test (golden/ = contrato congelado)
 ```
 
 ---
@@ -250,12 +373,16 @@ la que trajo el soporte real de LID addressing, sin el cual los mensajes le
 quedaban al receptor como *"Esperando este mensaje"* de forma permanente. Vale
 el RC, pero conviene saberlo.
 
-El servidor MCP (stdio + streamable HTTP) todavía no está: es el paso que falta
-de `docs/plan-standalone-api-mcp.md`.
+Versión actual: **0.8.0**. Mientras la versión sea `0.x`, la API de
+conversaciones puede cambiar entre versiones menores; los endpoints de envío
+(`/send-*`, `/status`, `/queue/*`, `/groups`, `/health`) no, y su contrato está
+congelado en `test/golden/`.
 
 ## Documentación
 
 - **[`AGENTS.md`](AGENTS.md)** — briefing operativo completo: troubleshooting,
   re-pareo, drop-ins de systemd, rollback, gotchas conocidos.
+- **[`CHANGELOG.md`](CHANGELOG.md)** — qué cambió en cada versión.
+- **[`docs/pending.md`](docs/pending.md)** — lo que falta, por área.
 - **[`docs/plan-standalone-api-mcp.md`](docs/plan-standalone-api-mcp.md)** —
-  decisiones de arquitectura y trabajo pendiente.
+  decisiones de arquitectura.

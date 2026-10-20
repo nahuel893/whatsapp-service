@@ -50,8 +50,10 @@ quedaron desvinculados.
 - [ ] Producción sin `API_KEY`. Escucha sólo en `127.0.0.1` (`bind.conf`),
   pero los scopes no se hacen cumplir. Activarla exige actualizar el pipeline
   de informes en la misma pasada.
-- [ ] Producción sigue en la rama `release/0.1.x` (v0.1.1). Decidir cuándo
-  pasa a la línea de `main`.
+- [x] Producción pasó a v0.8.0 (2026-10-20), con `INBOUND_CAPTURE=true` y
+  sin grupos (`capture.conf`), para que Claude Code lea los chats por MCP
+  (key `claude-code`, scope `agent`). Respaldo de la cola previo en
+  `data/queue.db.bak-pre-0.8.0`. Los informes no cambian.
 - [ ] Borrar `../whatsapp-service.gitbak-20260827-013101/`: backup del `.git`
   previo a la limpieza del historial; **todavía contiene credenciales**.
 - [ ] Default de `HOST` a `127.0.0.1` en `lib/config.js`. Cambia el default

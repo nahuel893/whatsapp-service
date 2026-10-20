@@ -212,6 +212,7 @@ el pipeline de reportes incluido. Actualizá los consumidores en la misma pasada
 | `fast.conf` | `MESSAGE_QUEUE_MIN_DELAY_MS`, `MAX`, `WHATSAPP_WARMUP_MS` | Default actual: `0/0/0` (modo test rápido). Para producción → `90000/180000/120000` |
 | `diagnostics.conf` | `BAILEYS_LOG_LEVEL` | `silent`/`warn`/`debug`. Actual: `debug`. Para producción estable: `warn` |
 | `qr.conf` | `PRINT_QR=true` | Activo actualmente. Quitar cuando esté pareado y estable |
+| `capture.conf` | `INBOUND_CAPTURE=true`, `INBOUND_GROUPS=false` | Desde v0.8.0 en producción (2026-10-20): guarda los chats entrantes del número (no los grupos) para que Claude Code los lea por el MCP `whatsapp` |
 | `bind.conf` | `HOST=127.0.0.1` | **No sacar**: sin esto el servicio escucha en todas las interfaces y, sin `API_KEY`, cualquiera en la red manda WhatsApp desde este número |
 | `prod.conf` | `WorkingDirectory`, `ExecStart`, `DATA_DIR` | Producción corre desde un worktree fijado (`~/projects/work/whatsapp-service-worktrees/prod`), no desde la carpeta de desarrollo. `DATA_DIR` apunta al `data/` original para conservar `queue.db` |
 
